@@ -1,0 +1,238 @@
+@page "/admin/games/{Id:int}"
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ScoringService Scoring
+@inject ChangeNotifier Notifier
+@inject IJSRuntime JS
+
+<PageTitle>@(game?.Title ?? "Game") · Comp Tracker</PageTitle>
+
+<p><a href="admin/games" class="muted"><Icon Name="arrow-left" /> All games</a></p>
+
+@if (loaded && game is null)
+{
+    <h1>Game not found</h1>
+}
+else if (game is not null)
+{
+    <h1>@game.Title</h1>
+    <p>
+        <span class="badge @game.ScoringType">@game.ScoringType.Label()</span>
+        @if (!game.IsActive)
+        {
+            <span class="badge inactive-badge">Inactive</span>
+        }
+    </p>
+    @if (!string.IsNullOrWhiteSpace(game.Notes))
+    {
+        <p class="muted">@game.Notes</p>
+    }
+    <p class="muted small">
+        @if (game.ScoringType == ScoringType.TimeLowest)
+        {
+            <text>
+                Fill in minutes, seconds and milliseconds. Typing <code>:</code> or <code>.</code> jumps to the next box,
+                and you can paste a whole time like <code>4:32.150</code>. Use <strong>+ hr</strong> for runs over an hour.
+            </text>
+        }
+        else
+        {
+            <text>Enter the raw score. Commas are fine.</text>
+        }
+        Press Enter to save.
+    </p>
+
+    @if (rows.Count == 0)
+    {
+        <p class="muted">No active players yet. <a href="admin/players">Add players</a>.</p>
+    }
+    else
+    {
+        <table class="table scores">
+            <thead>
+                <tr><th>Place</th><th>Player</th><th>@(game.ScoringType == ScoringType.TimeLowest ? "Time" : "Score")</th><th>Points</th><th class="actions"></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var row in rows)
+                {
+                    <tr class="@(row.Standing is null ? "unplayed" : "")">
+                        <td class="place @PlaceClass(row.Standing?.Place)">
+                            @(row.Standing is null ? "—" : ScoreFormat.Ordinal(row.Standing.Place))
+                        </td>
+                        <td class="strong">@row.PlayerName</td>
+                        <td>
+                            <span class="score-entry">
+                                <Icon Name="@ScoreValue.IconName(game.ScoringType)" Class="score-icon" />
+                                @if (IsTime)
+                                {
+                                    <TimeInput Parts="row.Time" Invalid="@(row.Error is not null)"
+                                               OnChange="() => row.Error = null" OnEnter="() => SaveIfDirtyAsync(row)" />
+                                }
+                                else
+                                {
+                                    <input class="input score-input @(row.Error is null ? "" : "invalid")"
+                                           placeholder="@ScoreFormat.Placeholder(game.ScoringType)"
+                                           @bind="row.Draft" @bind:event="oninput" @bind:after="() => row.Error = null"
+                                           @onkeydown="e => OnKeyDown(e, row)" />
+                                }
+                            </span>
+                            @if (row.Error is not null)
+                            {
+                                <div class="error small">@row.Error</div>
+                            }
+                            else if (IsTime && IsDirty(row) && Current(row) is { Length: > 0 } preview)
+                            {
+                                <div class="muted small">= <span class="score-value"><Icon Name="@ScoreValue.IconName(game.ScoringType)" Class="score-icon" />@preview</span></div>
+                            }
+                            else if (row.Standing is null)
+                            {
+                                <div class="muted small">Not played</div>
+                            }
+                        </td>
+                        <td>@(row.Standing?.Points.ToString() ?? "")</td>
+                        <td class="actions">
+                            <button class="btn sm primary" @onclick="() => SaveAsync(row)" disabled="@(!IsDirty(row))">Save</button>
+                            <button class="btn sm danger" @onclick="() => ClearAsync(row)" disabled="@(row.Standing is null)">Clear</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Game? game;
+    private bool loaded;
+    private List<Row> rows = [];
+
+    private class Row
+    {
+        public int PlayerId { get; init; }
+        public string PlayerName { get; init; } = "";
+        public Standing? Standing { get; init; }
+        public string Saved { get; init; } = "";
+        public string Draft { get; set; } = "";              // score games
+        public TimeParts Time { get; set; } = new();         // speedrun games
+        public string? Error { get; set; }
+    }
+
+    private bool IsTime => game?.ScoringType == ScoringType.TimeLowest;
+
+    // What the row would save as, formatted like the saved value ("" = empty, null = not a valid time yet).
+    private string? Current(Row row)
+    {
+        if (!IsTime)
+            return row.Draft.Trim();
+        if (row.Time.IsEmpty)
+            return "";
+        return row.Time.TryGetMilliseconds(out var ms, out _) ? ScoreFormat.FormatTime(ms) : null;
+    }
+
+    private bool IsDirty(Row row) => Current(row) != row.Saved;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        game = await db.Games.AsNoTracking().FirstOrDefaultAsync(g => g.Id == Id);
+        loaded = true;
+        if (game is null)
+            return;
+
+        var players = await db.Players.AsNoTracking().Where(p => p.IsActive).ToListAsync();
+        var standings = (await Scoring.GetGameStandingsAsync(Id)).ToDictionary(s => s.PlayerId);
+
+        // Ranked players first (by place), then anyone who hasn't played yet, alphabetically.
+        rows = players
+            .Select(p =>
+            {
+                standings.TryGetValue(p.Id, out var s);
+                var text = s is null ? "" : ScoreFormat.Format(game.ScoringType, s.Value);
+                return new Row
+                {
+                    PlayerId = p.Id,
+                    PlayerName = p.Name,
+                    Standing = s,
+                    Saved = text,
+                    Draft = text,
+                    Time = s is null ? new TimeParts() : TimeParts.FromMilliseconds(s.Value),
+                };
+            })
+            .OrderBy(r => r.Standing?.Place ?? int.MaxValue)
+            .ThenBy(r => r.PlayerName)
+            .ToList();
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e, Row row)
+    {
+        if (e.Key == "Enter")
+            await SaveIfDirtyAsync(row);
+    }
+
+    private async Task SaveIfDirtyAsync(Row row)
+    {
+        if (IsDirty(row))
+            await SaveAsync(row);
+    }
+
+    private async Task SaveAsync(Row row)
+    {
+        if (Current(row) == "")
+        {
+            await ClearAsync(row);
+            return;
+        }
+
+        decimal value;
+        if (IsTime)
+        {
+            if (!row.Time.TryGetMilliseconds(out value, out var timeError))
+            {
+                row.Error = timeError;
+                return;
+            }
+        }
+        else if (!ScoreFormat.TryParseNumber(row.Draft, out value) || value < 0)
+        {
+            row.Error = "That isn't a valid number.";
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var score = await db.Scores.FirstOrDefaultAsync(s => s.GameId == Id && s.PlayerId == row.PlayerId);
+        if (score is null)
+        {
+            score = new Score { GameId = Id, PlayerId = row.PlayerId };
+            db.Scores.Add(score);
+        }
+        score.Value = value;
+        score.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        Notifier.Notify();
+        await LoadAsync();
+    }
+
+    private async Task ClearAsync(Row row)
+    {
+        if (row.Standing is null)
+        {
+            row.Draft = "";
+            row.Time = new TimeParts();
+            row.Error = null;
+            return;
+        }
+        if (!await JS.InvokeAsync<bool>("confirm", $"Clear {row.PlayerName}'s score for {game!.Title}?"))
+            return;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        await db.Scores.Where(s => s.GameId == Id && s.PlayerId == row.PlayerId).ExecuteDeleteAsync();
+        Notifier.Notify();
+        await LoadAsync();
+    }
+
+    private static string PlaceClass(int? place) => place is { } p ? ScoreFormat.PlaceClass(p) : "";
+}

@@ -1,0 +1,106 @@
+@page "/games/{Id:int}"
+@implements IDisposable
+@inject ScoringService Scoring
+@inject ChangeNotifier Notifier
+@inject IConfiguration Config
+
+<PageTitle>@(board?.Summary.Title ?? "Game") · @EventName</PageTitle>
+
+@* Read-only, live-updating standings for one game (opened from a dashboard game card). *@
+<div class="dashboard game-board">
+    <header class="dash-header">
+        <a href="/" class="back-link"><Icon Name="arrow-left" /> Dashboard</a>
+    </header>
+
+    @if (!loaded)
+    {
+        <p class="muted">Loading…</p>
+    }
+    else if (board is null)
+    {
+        <p class="muted big-empty">That game doesn't exist anymore.</p>
+    }
+    else
+    {
+        var s = board.Summary;
+        <div class="board-title">
+            <h1>@s.Title</h1>
+            <span class="badge @s.ScoringType">@s.ScoringType.Label()</span>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(board.Notes))
+        {
+            <p class="muted">@board.Notes</p>
+        }
+
+        <div class="dash-grid">
+            <section class="panel">
+                <h2><span><Icon Name="trophy" Class="gold" /> Standings</span></h2>
+                @if (s.Standings.Count == 0)
+                {
+                    <p class="muted big-empty">No scores posted yet. Be the first!</p>
+                }
+                else
+                {
+                    <ol class="leaderboard">
+                        @foreach (var st in s.Standings)
+                        {
+                            <li class="lb-row board-row rank-@Math.Min(st.Place, 4)">
+                                <span class="lb-rank">@st.Place</span>
+                                <span class="lb-name">@st.PlayerName</span>
+                                <ScoreValue Type="s.ScoringType" Value="st.Value" Class="board-result" />
+                                <span class="lb-points">@st.Points<small>pts</small></span>
+                            </li>
+                        }
+                    </ol>
+                }
+            </section>
+
+            <section class="panel">
+                <h2><span><Icon Name="game-controller" Class="accent" /> Still to play</span></h2>
+                @if (board.NotPlayed.Count == 0)
+                {
+                    <p class="all-done"><Icon Name="confetti" Class="gold" /> Everyone has played this one!</p>
+                }
+                else
+                {
+                    <div class="finished">
+                        @foreach (var name in board.NotPlayed)
+                        {
+                            <span class="chip todo-chip">@name</span>
+                        }
+                    </div>
+                }
+            </section>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private GameBoard? board;
+    private bool loaded;
+
+    private string EventName => Config["EventName"] ?? "Gaming Tournament";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+        Notifier.Changed -= OnDataChanged;
+        Notifier.Changed += OnDataChanged;
+    }
+
+    private async Task LoadAsync()
+    {
+        board = await Scoring.GetGameBoardAsync(Id);
+        loaded = true;
+    }
+
+    private void OnDataChanged() => _ = InvokeAsync(async () =>
+    {
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => Notifier.Changed -= OnDataChanged;
+}

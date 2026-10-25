@@ -1,0 +1,49 @@
+@page "/stats"
+@inject ScoringService Scoring
+@inject IConfiguration Config
+@inject IJSRuntime JS
+
+<PageTitle>Stats · @EventName</PageTitle>
+
+<div class="report-page">
+    <nav class="report-toolbar no-print">
+        <a href="/"><Icon Name="arrow-left" /> Dashboard</a>
+        <span class="grow"></span>
+        <button class="btn primary" @onclick="PrintAsync" disabled="@(report is null)"><Icon Name="printer" /> Print everything</button>
+    </nav>
+
+    @if (report is null)
+    {
+        <p class="muted">Loading…</p>
+    }
+    else if (report.Players.Count == 0)
+    {
+        <p class="muted">No players yet.</p>
+    }
+    else
+    {
+        <div class="report-picker no-print">
+            <span class="muted">Print just one player:</span>
+            @foreach (var p in report.Players)
+            {
+                <a class="chip-link" href="stats/@p.Row.PlayerId">@p.Row.PlayerName</a>
+            }
+        </div>
+
+        <TournamentSummaryCard Report="report" EventName="@EventName" />
+        @foreach (var p in report.Players)
+        {
+            <PlayerReportCard Report="p" EventName="@EventName" />
+        }
+    }
+</div>
+
+@code {
+    private TournamentReport? report;
+
+    private string EventName => Config["EventName"] ?? "Gaming Tournament";
+
+    protected override async Task OnInitializedAsync() => report = await Scoring.GetReportAsync();
+
+    private async Task PrintAsync() => await JS.InvokeVoidAsync("print");
+}

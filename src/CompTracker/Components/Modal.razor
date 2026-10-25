@@ -1,0 +1,38 @@
+@* Simple modal dialog: closes on Escape, the X button, or a click on the backdrop. Focuses its first field when opened. *@
+@inject IJSRuntime JS
+
+@if (IsOpen)
+{
+    <div class="modal-backdrop" @onclick="CloseAsync">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="@titleId" tabindex="-1"
+             @ref="dialog" @onclick:stopPropagation @onkeydown="OnKeyDown">
+            <header class="modal-head">
+                <h2 id="@titleId">@Title</h2>
+                <button type="button" class="btn icon-only" @onclick="CloseAsync"><Icon Name="x-circle" Title="Close" /></button>
+            </header>
+            @ChildContent
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private readonly string titleId = $"modal-{Guid.NewGuid():N}";
+    private ElementReference dialog;
+    private bool wasOpen;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (IsOpen && !wasOpen)
+            await JS.InvokeVoidAsync("compTracker.focusFirst", dialog);
+        wasOpen = IsOpen;
+    }
+
+    private Task CloseAsync() => OnClose.InvokeAsync();
+
+    private Task OnKeyDown(KeyboardEventArgs e) => e.Key == "Escape" ? CloseAsync() : Task.CompletedTask;
+}

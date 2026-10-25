@@ -1,0 +1,169 @@
+@* One printable sheet for one player: final place, headline stats, points by game, highlights, game-by-game results. *@
+
+<article class="sheet">
+    <header class="sheet-head">
+        <div>
+            <div class="eyebrow">@EventName · Player report</div>
+            <h1 class="sheet-name">@Report.Row.PlayerName</h1>
+            <div class="sheet-sub">@StandingLine()</div>
+        </div>
+        <div class="finish-box">
+            <span>Finished</span>
+            <strong>@ScoreFormat.Ordinal(Report.Row.Rank)</strong>
+            <span>of @Report.PlayersTotal players</span>
+        </div>
+    </header>
+
+    <div class="tiles">
+        <div class="tile"><strong>@Report.Row.TotalPoints</strong><span>Final points</span></div>
+        <div class="tile"><strong>@Report.Row.GamesDone / @Report.Row.GamesTotal</strong><span>Games played</span></div>
+        <div class="tile"><strong>@Report.Row.FirstPlaces</strong><span>1st places</span></div>
+        <div class="tile"><strong>@Report.Podiums</strong><span>Podium finishes</span></div>
+        <div class="tile">
+            <strong>@(Report.AveragePlace is { } avg ? avg.ToString("0.#") : "—")</strong>
+            <span>Average place</span>
+        </div>
+    </div>
+
+    <section class="sheet-section">
+        <h2>Points by game</h2>
+        <div class="bar-chart" role="img" aria-label="Points earned in each game, out of @Report.MaxPointsPerGame">
+            @foreach (var r in Report.Results)
+            {
+                var points = r.Standing?.Points ?? 0;
+                var pct = Report.MaxPointsPerGame == 0 ? 0 : points * 100.0 / Report.MaxPointsPerGame;
+                <div class="bar-row" title="@BarTooltip(r)">
+                    <span class="bar-label">@r.Game.Title</span>
+                    <span class="bar-track">
+                        @if (r.Played)
+                        {
+                            <span class="bar-fill" style="width:@pct.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)%"></span>
+                        }
+                    </span>
+                    <span class="bar-value">
+                        @if (r.Played)
+                        {
+                            <strong>@points</strong> <span class="muted">· @ScoreFormat.Ordinal(r.Standing!.Place)</span>
+                        }
+                        else
+                        {
+                            <span class="muted">Did not play</span>
+                        }
+                    </span>
+                </div>
+            }
+            <div class="bar-axis">
+                <span></span>
+                <span class="bar-axis-scale"><span>0</span><span>@Report.MaxPointsPerGame pts</span></span>
+                <span></span>
+            </div>
+        </div>
+    </section>
+
+    <div class="@(ShowHighlights ? "sheet-cols" : "")">
+        @if (ShowHighlights)
+        {
+        <section class="sheet-section">
+            <h2>Highlights</h2>
+            <dl class="highlights">
+                @if (Report.BestGame is { } best)
+                {
+                    <dt>Best finish</dt>
+                    <dd>@ScoreFormat.Ordinal(best.Standing!.Place) of @best.Competitors in <strong>@best.Game.Title</strong></dd>
+                }
+                @if (Report.ClosestCall is { } close)
+                {
+                    <dt>Closest call</dt>
+                    <dd>
+                        @ScoreFormat.FormatGap(close.Result.Game.ScoringType, close.Gap) behind
+                        @close.Result.Ahead!.PlayerName in <strong>@close.Result.Game.Title</strong>
+                    </dd>
+                }
+                @if (Report.Rival is { } rival)
+                {
+                    <dt>Rival</dt>
+                    <dd>
+                        <strong>@rival.PlayerName</strong> finished just ahead of you
+                        @(rival.Times == 1 ? "once" : $"{rival.Times} times")
+                    </dd>
+                }
+                @if (Report.NextAbove is { } above)
+                {
+                    <dt>Chasing</dt>
+                    <dd>@Pts(above.TotalPoints - Report.Row.TotalPoints) behind @above.PlayerName (@ScoreFormat.Ordinal(above.Rank))</dd>
+                }
+                @if (Report.NextBelow is { } below)
+                {
+                    <dt>Holding off</dt>
+                    <dd>@Pts(Report.Row.TotalPoints - below.TotalPoints) ahead of @below.PlayerName (@ScoreFormat.Ordinal(below.Rank))</dd>
+                }
+                @if (Report.BestGame is null)
+                {
+                    <dd class="muted">No games played. There's always next year!</dd>
+                }
+            </dl>
+        </section>
+        }
+
+        <section class="sheet-section">
+            <h2>Game by game</h2>
+            <table class="sheet-table">
+                <thead>
+                    <tr><th>Game</th><th>Result</th><th>Place</th><th class="num">Pts</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in Report.Results)
+                    {
+                        <tr class="@(r.Played ? "" : "missed")">
+                            <td>
+                                <span class="dot-marker @(r.Played ? "filled" : "")"></span>
+                                @r.Game.Title
+                                <div class="muted tiny">@r.Game.ScoringType.ShortLabel()</div>
+                            </td>
+                            <td>
+                                @if (r.Played)
+                                {
+                                    <ScoreValue Type="r.Game.ScoringType" Value="r.Standing!.Value" />
+                                }
+                                else
+                                {
+                                    <text>—</text>
+                                }
+                            </td>
+                            <td>@(r.Played ? $"{ScoreFormat.Ordinal(r.Standing!.Place)} of {r.Competitors}" : "—")</td>
+                            <td class="num">@(r.Standing?.Points.ToString() ?? "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </section>
+    </div>
+
+    <footer class="sheet-foot">
+        <span>@EventName</span>
+        <span>Final results · Thanks for playing!</span>
+    </footer>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public PlayerReport Report { get; set; } = null!;
+    [Parameter, EditorRequired] public string EventName { get; set; } = "";
+
+    // Highlights (best finish, closest call, rival, points gaps) are hidden for now; flip to true to bring them back.
+    private static readonly bool ShowHighlights = false;
+
+    private string StandingLine()
+    {
+        if (Report.Row.Rank == 1)
+            return Report.NextBelow is { } second
+                ? $"Champion! Won by {Pts(Report.Row.TotalPoints - second.TotalPoints)}"
+                : "Champion!";
+        return $"{Pts(Report.Row.TotalPoints)} from {Report.Row.GamesDone} game{(Report.Row.GamesDone == 1 ? "" : "s")}";
+    }
+
+    private static string Pts(int n) => n == 1 ? "1 pt" : $"{n} pts";
+
+    private static string BarTooltip(GameResult r) => r.Played
+        ? $"{r.Game.Title}: {ScoreFormat.Ordinal(r.Standing!.Place)} of {r.Competitors} · {ScoreFormat.Format(r.Game.ScoringType, r.Standing.Value)} · {r.Standing.Points} pts"
+        : $"{r.Game.Title}: did not play";
+}

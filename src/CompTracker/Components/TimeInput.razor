@@ -1,0 +1,58 @@
+@* Separate boxes for a speedrun time: [h :] min : sec . fraction.
+   Keyboard helpers (":" / "." jump boxes, seconds auto-advance, paste "4:32.150") live in wwwroot/app.js. *@
+
+<div class="time-input @(Invalid ? "invalid" : "")" @onkeydown="OnKeyDown">
+    @if (Parts.ShowHours)
+    {
+        <label class="time-part">
+            <input class="input" data-time-part="h" inputmode="numeric" autocomplete="off" placeholder="0"
+                   @bind="Parts.Hours" @bind:event="oninput" @bind:after="Changed" />
+            <span>hr</span>
+        </label>
+        <span class="time-sep">:</span>
+    }
+    <label class="time-part">
+        <input class="input" data-time-part="m" inputmode="numeric" autocomplete="off" placeholder="0"
+               @bind="Parts.Minutes" @bind:event="oninput" @bind:after="Changed" />
+        <span>min</span>
+    </label>
+    <span class="time-sep">:</span>
+    <label class="time-part">
+        <input class="input" data-time-part="s" data-max-digits="2" inputmode="numeric" autocomplete="off" placeholder="00"
+               @bind="Parts.Seconds" @bind:event="oninput" @bind:after="Changed" />
+        <span>sec</span>
+    </label>
+    <span class="time-sep">.</span>
+    <label class="time-part wide">
+        <input class="input" data-time-part="f" data-max-digits="3" inputmode="numeric" autocomplete="off" placeholder="000"
+               @bind="Parts.Fraction" @bind:event="oninput" @bind:after="Changed" />
+        <span>ms</span>
+    </label>
+    @if (!Parts.ShowHours)
+    {
+        <button type="button" class="btn link sm" title="Add an hours box" @onclick="AddHours">+ hr</button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public TimeParts Parts { get; set; } = null!;
+    [Parameter] public bool Invalid { get; set; }
+    [Parameter] public EventCallback OnChange { get; set; }
+    [Parameter] public EventCallback OnEnter { get; set; }
+
+    private Task Changed() => OnChange.InvokeAsync();
+
+    private async Task AddHours()
+    {
+        // Move whole hours out of the minutes box so the value doesn't change.
+        if (long.TryParse(Parts.Minutes, out var minutes) && minutes >= 60)
+        {
+            Parts.Hours = (minutes / 60).ToString();
+            Parts.Minutes = (minutes % 60).ToString();
+        }
+        Parts.ShowHours = true;
+        await Changed();
+    }
+
+    private Task OnKeyDown(KeyboardEventArgs e) => e.Key == "Enter" ? OnEnter.InvokeAsync() : Task.CompletedTask;
+}

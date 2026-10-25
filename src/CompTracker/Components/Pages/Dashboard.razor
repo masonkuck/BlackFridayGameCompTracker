@@ -1,0 +1,248 @@
+@page "/"
+@implements IDisposable
+@inject ScoringService Scoring
+@inject ChangeNotifier Notifier
+@inject IConfiguration Config
+@inject AdminSession AdminSession
+
+<PageTitle>Leaderboard · @EventName</PageTitle>
+
+<div class="dashboard">
+    <header class="dash-header">
+        <h1>@EventName</h1>
+        <a class="admin-link" href="admin/games"><Icon Name="gear-six" Title="Admin" /></a>
+    </header>
+
+    @if (leaderboard is null)
+    {
+        <p class="muted">Loading…</p>
+    }
+    else if (leaderboard.Count == 0)
+    {
+        <p class="muted big-empty">No players yet. Add them under <a href="admin/players">Admin → Players</a>.</p>
+    }
+    else
+    {
+        <div class="dash-grid">
+            <section class="panel">
+                <h2><span><Icon Name="trophy" Class="gold" /> Leaderboard</span></h2>
+                <ol class="leaderboard">
+                    @foreach (var row in leaderboard)
+                    {
+                        var pct = row.GamesTotal == 0 ? 0 : row.GamesDone * 100 / row.GamesTotal;
+                        <li class="lb-row rank-@Math.Min(row.Rank, 4)">
+                            <span class="lb-rank">@row.Rank</span>
+                            <span class="lb-name">
+                                @row.PlayerName
+                                @if (row.FirstPlaces > 0)
+                                {
+                                    <span class="firsts" title="1st places"><Icon Name="medal" /> ×@row.FirstPlaces</span>
+                                }
+                                <span class="progress" title="@row.GamesDone of @row.GamesTotal games played">
+                                    <span class="progress-fill" style="width:@(pct)%"></span>
+                                </span>
+                            </span>
+                            <span class="lb-done">@row.GamesDone/@row.GamesTotal</span>
+                            <span class="lb-points">@row.TotalPoints<small>pts</small></span>
+                        </li>
+                    }
+                </ol>
+            </section>
+
+            <div class="dash-side">
+            @if (games.Count > 0)
+            {
+                <section class="panel">
+                    <h2><span><Icon Name="medal" Class="accent" /> Games</span></h2>
+                    <div class="game-cards">
+                        @foreach (var g in games)
+                        {
+                            var leaders = g.Standings.Where(s => s.Place == 1).ToList();
+                            var pct = playerCount == 0 ? 0 : g.Standings.Count * 100 / playerCount;
+                            <a class="game-card" href="games/@g.GameId">
+                                <span class="game-card-head">
+                                    <span class="game-card-title">@g.Title</span>
+                                    <span class="badge @g.ScoringType">@g.ScoringType.ShortLabel()</span>
+                                </span>
+                                @if (leaders.Count == 0)
+                                {
+                                    <span class="game-card-leader muted">No scores yet</span>
+                                }
+                                else
+                                {
+                                    <span class="game-card-leader">
+                                        <Icon Name="crown" Class="gold" />
+                                        <span class="leader-name">@string.Join(" & ", leaders.Select(l => l.PlayerName))</span>
+                                        <ScoreValue Type="g.ScoringType" Value="leaders[0].Value" Class="leader-result" />
+                                    </span>
+                                }
+                                <span class="game-card-foot">
+                                    <span class="progress"><span class="progress-fill" style="width:@(pct)%"></span></span>
+                                    <span class="muted small">@g.Standings.Count/@playerCount</span>
+                                </span>
+                            </a>
+                        }
+                    </div>
+                </section>
+            }
+
+            <section class="panel">
+                <h2>
+                    <span><Icon Name="game-controller" Class="accent" /> Still to play</span>
+                    @if (pageCount > 1)
+                    {
+                        <span class="page-dots">
+                            @for (var i = 0; i < pageCount; i++)
+                            {
+                                <span class="dot @(i == pageIndex ? "on" : "")"></span>
+                            }
+                        </span>
+                    }
+                </h2>
+
+                @if (remaining.Count == 0)
+                {
+                    <p class="all-done"><Icon Name="confetti" Class="gold" /> Everyone has played every game!</p>
+                }
+                else
+                {
+                    <div class="todo-page" @key="pageIndex">
+                        @foreach (var todo in remaining.Skip(pageIndex * PageSize).Take(PageSize))
+                        {
+                            <div class="todo-card">
+                                <div class="todo-name">@todo.PlayerName <span class="muted">· @todo.RemainingGames.Count left</span></div>
+                                <ul class="todo-games">
+                                    @foreach (var g in todo.RemainingGames)
+                                    {
+                                        <li>@g</li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (finished.Count > 0)
+                {
+                    <div class="finished">
+                        <span class="muted"><Icon Name="check-circle" Class="ok-text" /> All done:</span>
+                        @foreach (var f in finished)
+                        {
+                            <span class="chip">@f.PlayerName</span>
+                        }
+                    </div>
+                }
+            </section>
+            </div>
+        </div>
+    }
+</div>
+
+@if (recent.Count > 0)
+{
+    @* Items are rendered twice so the scroll loops seamlessly (the track slides by exactly half its width). *@
+    <div class="ticker" aria-label="Recently posted scores">
+        <span class="ticker-label"><Icon Name="timer" /> Latest</span>
+        <div class="ticker-viewport">
+            <div class="ticker-track" style="animation-duration:@(Math.Max(recent.Count * 6, 20))s">
+                @for (var copy = 0; copy < 2; copy++)
+                {
+                    <span class="ticker-group" aria-hidden="@(copy == 1 ? "true" : null)">
+                        @foreach (var r in recent)
+                        {
+                            <span class="ticker-item">
+                                <strong>@r.Standing.PlayerName</strong>
+                                <span class="muted">posted</span>
+                                <ScoreValue Type="r.Game.ScoringType" Value="r.Standing.Value" Class="accent" />
+                                <span class="muted">in</span> @r.Game.Title
+                                <span class="ticker-place @PlaceClass(r.Standing.Place)">@ScoreFormat.Ordinal(r.Standing.Place)</span>
+                                <span class="muted small">@r.Standing.UpdatedAt.ToLocalTime().ToString("h:mm tt")</span>
+                            </span>
+                        }
+                    </span>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private const int PageSize = 3;
+    private static readonly TimeSpan RotateEvery = TimeSpan.FromSeconds(7);
+
+    private IReadOnlyList<LeaderboardRow>? leaderboard;
+    private List<TodoRow> remaining = [];
+    private List<TodoRow> finished = [];
+    private IReadOnlyList<GameSummary> games = [];
+    private IReadOnlyList<RecentScore> recent = [];
+    private int playerCount;
+    private int pageIndex;
+    private int pageCount => (remaining.Count + PageSize - 1) / PageSize;
+
+    private readonly CancellationTokenSource cts = new();
+
+    private string EventName => Config["EventName"] ?? "Gaming Tournament";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Leaving admin for the dashboard ends the admin session; the PIN is needed again.
+        AdminSession.Lock();
+        await LoadAsync();
+        Notifier.Changed += OnDataChanged;
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+            _ = RotateLoopAsync(cts.Token);
+    }
+
+    private async Task LoadAsync()
+    {
+        var data = await Scoring.GetDashboardAsync();
+        leaderboard = data.Leaderboard;
+        remaining = data.Todo.Where(t => t.RemainingGames.Count > 0).ToList();
+        finished = data.Todo.Where(t => t.RemainingGames.Count == 0).ToList();
+        games = data.Games;
+        recent = data.Recent;
+        playerCount = data.PlayerCount;
+        if (pageIndex >= pageCount)
+            pageIndex = 0;
+    }
+
+    private static string PlaceClass(int place) => ScoreFormat.PlaceClass(place);
+
+    private async Task RotateLoopAsync(CancellationToken token)
+    {
+        using var timer = new PeriodicTimer(RotateEvery);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(token))
+            {
+                if (pageCount <= 1)
+                    continue;
+                await InvokeAsync(() =>
+                {
+                    pageIndex = (pageIndex + 1) % pageCount;
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private void OnDataChanged() => _ = InvokeAsync(async () =>
+    {
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose()
+    {
+        Notifier.Changed -= OnDataChanged;
+        cts.Cancel();
+        cts.Dispose();
+    }
+}

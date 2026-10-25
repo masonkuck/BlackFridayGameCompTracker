@@ -1,0 +1,44 @@
+@inherits LayoutComponentBase
+@layout MainLayout
+@inject AdminSession Session
+
+@if (Session.IsUnlocked)
+{
+    <header class="admin-header">
+        <a class="brand" href="/"><Icon Name="trophy" Class="gold" /> Comp Tracker</a>
+        <NavMenu />
+    </header>
+
+    <main class="admin-main">
+        @Body
+    </main>
+}
+else
+{
+    <main class="pin-gate">
+        <form class="card pin-card" @onsubmit="Unlock">
+            <Icon Name="lock-key" Class="pin-icon" />
+            <h1>Admin</h1>
+            <p class="muted">Enter the PIN to manage games, players and scores.</p>
+            <input class="input pin-input @(failed ? "invalid" : "")" type="password" inputmode="numeric"
+                   autocomplete="off" autofocus placeholder="PIN" @bind="pin" @bind:event="oninput" />
+            @if (failed)
+            {
+                <p class="error small">Wrong PIN.</p>
+            }
+            <button class="btn primary" type="submit" disabled="@string.IsNullOrWhiteSpace(pin)">Unlock</button>
+            <a href="/" class="muted small"><Icon Name="arrow-left" /> Back to dashboard</a>
+        </form>
+    </main>
+}
+
+@code {
+    private string pin = "";
+    private bool failed;
+
+    private void Unlock()
+    {
+        failed = !Session.TryUnlock(pin);
+        pin = "";
+    }
+}

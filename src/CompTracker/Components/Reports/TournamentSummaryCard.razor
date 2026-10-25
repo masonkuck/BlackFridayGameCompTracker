@@ -1,0 +1,85 @@
+@* Printable cover sheet: final standings plus who won each game. *@
+
+<article class="sheet">
+    <header class="sheet-head">
+        <div>
+            <div class="eyebrow">@EventName · Final results</div>
+            <h1 class="sheet-name">Final standings</h1>
+            <div class="sheet-sub">@Report.Leaderboard.Count players · @Report.Games.Count games</div>
+        </div>
+        @if (Report.Leaderboard.FirstOrDefault() is { } champ)
+        {
+            <div class="finish-box">
+                <span>Champion</span>
+                <strong class="champ-name">@ChampionNames()</strong>
+                <span>@champ.TotalPoints pts</span>
+            </div>
+        }
+    </header>
+
+    <section class="sheet-section">
+        <table class="sheet-table standings">
+            <thead>
+                <tr><th>Place</th><th>Player</th><th class="num">Points</th><th class="num">Games</th><th class="num">1st places</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var row in Report.Leaderboard)
+                {
+                    <tr class="rank-@Math.Min(row.Rank, 4)">
+                        <td class="strong">@ScoreFormat.Ordinal(row.Rank)</td>
+                        <td class="strong">@row.PlayerName</td>
+                        <td class="num strong">@row.TotalPoints</td>
+                        <td class="num">@row.GamesDone / @row.GamesTotal</td>
+                        <td class="num">@row.FirstPlaces</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+
+    <section class="sheet-section">
+        <h2>Game winners</h2>
+        <table class="sheet-table">
+            <thead>
+                <tr><th>Game</th><th>Winner</th><th>Result</th><th class="num">Players</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var g in Report.Games)
+                {
+                    var winners = g.Standings.Where(s => s.Place == 1).ToList();
+                    <tr>
+                        <td>
+                            @g.Title
+                            <div class="muted tiny">@g.ScoringType.ShortLabel()</div>
+                        </td>
+                        <td class="strong">@(winners.Count == 0 ? "—" : string.Join(", ", winners.Select(w => w.PlayerName)))</td>
+                        <td>
+                            @if (winners.Count == 0)
+                            {
+                                <text>—</text>
+                            }
+                            else
+                            {
+                                <ScoreValue Type="g.ScoringType" Value="winners[0].Value" />
+                            }
+                        </td>
+                        <td class="num">@g.Standings.Count</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+
+    <footer class="sheet-foot">
+        <span>@EventName</span>
+        <span>Thanks for playing!</span>
+    </footer>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public TournamentReport Report { get; set; } = null!;
+    [Parameter, EditorRequired] public string EventName { get; set; } = "";
+
+    private string ChampionNames() =>
+        string.Join(" & ", Report.Leaderboard.Where(r => r.Rank == 1).Select(r => r.PlayerName));
+}

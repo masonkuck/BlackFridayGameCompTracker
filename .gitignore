@@ -1,0 +1,9 @@
+bin/
+obj/
+.vs/
+*.user
+
+# Local tournament data
+*.db
+*.db-shm
+*.db-wal

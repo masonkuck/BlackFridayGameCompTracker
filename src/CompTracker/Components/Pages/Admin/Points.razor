@@ -1,0 +1,110 @@
+@page "/admin/points"
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ChangeNotifier Notifier
+
+<PageTitle>Points · Comp Tracker</PageTitle>
+
+<h1>Points per place</h1>
+<p class="muted">
+    This applies to every game. Places past the end of the list get the last value, and nobody gets less than 1 point.
+    Tied scores share a place.
+</p>
+
+@if (rows is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="card points-editor">
+        @foreach (var row in rows)
+        {
+            <label class="points-row">
+                <span class="place">@Ordinal(row.Place)</span>
+                <input class="input num" type="number" min="1" @bind="row.Points" @bind:after="MarkDirty" />
+                <span class="muted">pts</span>
+            </label>
+        }
+
+        <div class="form-row">
+            <button class="btn sm" @onclick="AddPlace">+ Add place</button>
+            <button class="btn sm" @onclick="RemoveLast" disabled="@(rows.Count <= 1)">− Remove last</button>
+            <button class="btn sm" @onclick="Reset">Reset to 10…1</button>
+        </div>
+
+        <div class="form-row">
+            <button class="btn primary" @onclick="SaveAsync" disabled="@(!dirty)">Save</button>
+            @if (saved)
+            {
+                <span class="ok-text">Saved ✓</span>
+            }
+            @if (error is not null)
+            {
+                <span class="error">@error</span>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private List<PlacePoints>? rows;
+    private bool dirty, saved;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        rows = await db.PlacePoints.AsNoTracking().OrderBy(pp => pp.Place).ToListAsync();
+        if (rows.Count == 0)
+            rows = AppDbContext.DefaultPlacePoints().ToList();
+    }
+
+    private void MarkDirty()
+    {
+        dirty = true;
+        saved = false;
+    }
+
+    private void AddPlace()
+    {
+        var last = rows![^1];
+        rows.Add(new PlacePoints { Place = last.Place + 1, Points = Math.Max(last.Points - 1, 1) });
+        MarkDirty();
+    }
+
+    private void RemoveLast()
+    {
+        rows!.RemoveAt(rows.Count - 1);
+        MarkDirty();
+    }
+
+    private void Reset()
+    {
+        rows = AppDbContext.DefaultPlacePoints().ToList();
+        MarkDirty();
+    }
+
+    private async Task SaveAsync()
+    {
+        var toSave = rows!;
+        if (toSave.Any(r => r.Points < 1))
+        {
+            error = "Every place has to be worth at least 1 point.";
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync();
+        await db.PlacePoints.ExecuteDeleteAsync();
+        db.PlacePoints.AddRange(toSave.Select(r => new PlacePoints { Place = r.Place, Points = r.Points }));
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+
+        error = null;
+        dirty = false;
+        saved = true;
+        Notifier.Notify();
+    }
+
+    private static string Ordinal(int n) => ScoreFormat.Ordinal(n);
+}

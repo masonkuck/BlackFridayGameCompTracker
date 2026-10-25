@@ -1,0 +1,207 @@
+@page "/admin/players"
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ChangeNotifier Notifier
+@inject IJSRuntime JS
+
+<PageTitle>Players · Comp Tracker</PageTitle>
+
+<div class="page-head">
+    <h1>Players</h1>
+    <button class="btn primary" @onclick="OpenAdd"><Icon Name="plus-circle" /> Add player</button>
+</div>
+
+@* Stays open after each add so a whole group can be entered in one go. *@
+<Modal IsOpen="addOpen" Title="Add players" OnClose="CloseAdd">
+    <form class="modal-body" @onsubmit="AddAsync">
+        <label class="field">
+            <span>Name</span>
+            <input class="input" placeholder="Player name" maxlength="100" @bind="newName" @bind:event="oninput" />
+        </label>
+        @if (addError is not null)
+        {
+            <p class="error small">@addError</p>
+        }
+        else if (addedThisTime.Count > 0)
+        {
+            <p class="ok-text small">
+                <Icon Name="check-circle" /> Added @string.Join(", ", addedThisTime). Type the next name, or press Done.
+            </p>
+        }
+        <div class="modal-actions">
+            <button class="btn" type="button" @onclick="CloseAdd">Done</button>
+            <button class="btn primary" type="submit" disabled="@string.IsNullOrWhiteSpace(newName)">Add</button>
+        </div>
+    </form>
+</Modal>
+
+@if (error is not null)
+{
+    <p class="error">@error</p>
+}
+
+@if (players is null)
+{
+    <p class="muted">Loading…</p>
+}
+else if (players.Count == 0)
+{
+    <p class="muted">No players yet. Use <strong>Add player</strong> for everyone who submitted a list.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr><th>Name</th><th>Scores</th><th>Status</th><th class="actions"></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var p in players)
+            {
+                <tr class="@(p.IsActive ? "" : "inactive")">
+                    <td>
+                        @if (editingId == p.Id)
+                        {
+                            <form class="form-row" @onsubmit="() => RenameAsync(p.Id)">
+                                <input class="input" maxlength="100" @bind="editName" @bind:event="oninput" />
+                                <button class="btn primary sm" type="submit">Save</button>
+                                <button class="btn sm" type="button" @onclick="() => editingId = null">Cancel</button>
+                            </form>
+                        }
+                        else
+                        {
+                            @p.Name
+                        }
+                    </td>
+                    <td>@p.Scores.Count</td>
+                    <td>
+                        <button class="btn sm @(p.IsActive ? "ok" : "")" @onclick="() => ToggleActiveAsync(p.Id)"
+                                title="Inactive players are hidden from standings, the leaderboard and the todo list">
+                            @(p.IsActive ? "Active" : "Inactive")
+                        </button>
+                    </td>
+                    <td class="actions">
+                        <button class="btn sm" @onclick="() => StartEdit(p)">Rename</button>
+                        <button class="btn sm danger" @onclick="() => DeleteAsync(p)" disabled="@(p.Scores.Count > 0)"
+                                title="@(p.Scores.Count > 0 ? "Has scores. Deactivate instead, or clear their scores first." : "Delete player")">
+                            Delete
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<Player>? players;
+    private string newName = "";
+    private string editName = "";
+    private int? editingId;
+    private string? error;
+    private bool addOpen;
+    private string? addError;
+    private readonly List<string> addedThisTime = [];
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private void OpenAdd()
+    {
+        newName = "";
+        addError = null;
+        addedThisTime.Clear();
+        addOpen = true;
+    }
+
+    private void CloseAdd() => addOpen = false;
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        players = await db.Players.AsNoTracking().Include(p => p.Scores).OrderBy(p => p.Name).ToListAsync();
+    }
+
+    private async Task AddAsync()
+    {
+        var name = newName.Trim();
+        if (name.Length == 0)
+            return;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        if (await db.Players.AnyAsync(p => p.Name == name))
+        {
+            addError = $"There's already a player called \"{name}\".";
+            return;
+        }
+
+        db.Players.Add(new Player { Name = name });
+        await db.SaveChangesAsync();
+        addError = null;
+        addedThisTime.Add(name);
+        newName = "";
+        await SavedAsync();
+    }
+
+    private void StartEdit(Player p)
+    {
+        editingId = p.Id;
+        editName = p.Name;
+        error = null;
+    }
+
+    private async Task RenameAsync(int id)
+    {
+        var name = editName.Trim();
+        if (name.Length == 0)
+            return;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        if (await NameTakenAsync(db, name, id))
+            return;
+
+        var player = await db.Players.FindAsync(id);
+        if (player is null)
+            return;
+        player.Name = name;
+        await db.SaveChangesAsync();
+        editingId = null;
+        await SavedAsync();
+    }
+
+    private async Task ToggleActiveAsync(int id)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var player = await db.Players.FindAsync(id);
+        if (player is null)
+            return;
+        player.IsActive = !player.IsActive;
+        await db.SaveChangesAsync();
+        await SavedAsync();
+    }
+
+    private async Task DeleteAsync(Player p)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete {p.Name}?"))
+            return;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        // Re-check: deleting a player with scores is blocked so results are never lost by accident.
+        if (await db.Scores.AnyAsync(s => s.PlayerId == p.Id))
+        {
+            error = $"{p.Name} has scores. Deactivate them instead.";
+            return;
+        }
+        await db.Players.Where(x => x.Id == p.Id).ExecuteDeleteAsync();
+        await SavedAsync();
+    }
+
+    private async Task<bool> NameTakenAsync(AppDbContext db, string name, int? exceptId)
+    {
+        // Name column uses NOCASE collation, so this comparison is case-insensitive.
+        var taken = await db.Players.AnyAsync(p => p.Name == name && p.Id != exceptId);
+        error = taken ? $"There's already a player called \"{name}\"." : null;
+        return taken;
+    }
+
+    private async Task SavedAsync()
+    {
+        error = null;
+        Notifier.Notify();
+        await LoadAsync();
+    }
+}

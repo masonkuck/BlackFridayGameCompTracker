@@ -1,0 +1,218 @@
+@page "/admin/games"
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ChangeNotifier Notifier
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Games · Comp Tracker</PageTitle>
+
+<div class="page-head">
+    <h1>Games</h1>
+    <button class="btn primary" @onclick="StartAdd"><Icon Name="plus-circle" /> Add game</button>
+</div>
+
+<Modal IsOpen="modalOpen" Title="@(editingId is null ? "Add a game" : "Edit game")" OnClose="CloseModal">
+    <form class="modal-body" @onsubmit="SaveAsync">
+        <label class="field">
+            <span>Title</span>
+            <input class="input" placeholder="e.g. Portal (Any%)" maxlength="200" @bind="title" @bind:event="oninput" />
+        </label>
+        <label class="field">
+            <span>Scoring</span>
+            <select class="input" @bind="scoringType">
+                @foreach (var t in Enum.GetValues<ScoringType>())
+                {
+                    <option value="@t">@t.Label()</option>
+                }
+            </select>
+        </label>
+        <label class="field">
+            <span>Notes <span class="muted">(optional)</span></span>
+            <textarea class="input" rows="3" maxlength="2000" placeholder="Platform, category, rules…" @bind="notes"></textarea>
+        </label>
+        <div class="modal-actions">
+            <button class="btn" type="button" @onclick="CloseModal">Cancel</button>
+            <button class="btn primary" type="submit" disabled="@string.IsNullOrWhiteSpace(title)">
+                @(editingId is null ? "Add game" : "Save changes")
+            </button>
+        </div>
+    </form>
+</Modal>
+
+@if (games is null)
+{
+    <p class="muted">Loading…</p>
+}
+else if (games.Count == 0)
+{
+    <p class="muted">No games yet. Use <strong>Add game</strong> for each one picked on Discord.</p>
+}
+else
+{
+    <table class="table clickable">
+        <thead>
+            <tr><th></th><th>Game</th><th>Scoring</th><th>Done</th><th>Status</th><th class="actions"></th></tr>
+        </thead>
+        <tbody>
+            @for (var i = 0; i < games.Count; i++)
+            {
+                var g = games[i];
+                var index = i;
+                var done = g.Scores.Count(s => activePlayerIds.Contains(s.PlayerId));
+                <tr class="@(g.IsActive ? "" : "inactive")" @onclick="() => Open(g.Id)">
+                    <td class="order" @onclick:stopPropagation>
+                        <span class="reorder">
+                            <button class="btn reorder-btn" title="Move up" disabled="@(index == 0)" @onclick="() => MoveAsync(index, -1)"><Icon Name="caret-up" /></button>
+                            <button class="btn reorder-btn" title="Move down" disabled="@(index == games.Count - 1)" @onclick="() => MoveAsync(index, 1)"><Icon Name="caret-down" /></button>
+                        </span>
+                    </td>
+                    <td>
+                        <a href="admin/games/@g.Id" class="strong">@g.Title</a>
+                        @if (!string.IsNullOrWhiteSpace(g.Notes))
+                        {
+                            <div class="muted small">@g.Notes</div>
+                        }
+                    </td>
+                    <td><span class="badge @g.ScoringType">@g.ScoringType.ShortLabel()</span></td>
+                    <td>
+                        <span class="@(done == activePlayerIds.Count && done > 0 ? "ok-text" : "")">@done / @activePlayerIds.Count</span>
+                    </td>
+                    <td @onclick:stopPropagation>
+                        <button class="btn sm @(g.IsActive ? "ok" : "")" @onclick="() => ToggleActiveAsync(g.Id)"
+                                title="Inactive games are hidden from the leaderboard and the todo list">
+                            @(g.IsActive ? "Active" : "Inactive")
+                        </button>
+                    </td>
+                    <td class="actions" @onclick:stopPropagation>
+                        <button class="btn sm" @onclick="() => StartEdit(g)"><Icon Name="pencil-simple" /> Edit</button>
+                        <button class="btn sm danger" @onclick="() => DeleteAsync(g)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<Game>? games;
+    private HashSet<int> activePlayerIds = [];
+    private bool modalOpen;
+    private int? editingId;
+    private string title = "";
+    private ScoringType scoringType = ScoringType.TimeLowest;
+    private string? notes;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        games = await db.Games.AsNoTracking().Include(g => g.Scores)
+            .OrderBy(g => g.SortOrder).ThenBy(g => g.Title).ToListAsync();
+        activePlayerIds = (await db.Players.Where(p => p.IsActive).Select(p => p.Id).ToListAsync()).ToHashSet();
+    }
+
+    private void Open(int id) => Nav.NavigateTo($"admin/games/{id}");
+
+    private void StartAdd()
+    {
+        ResetForm();
+        modalOpen = true;
+    }
+
+    private void StartEdit(Game g)
+    {
+        editingId = g.Id;
+        title = g.Title;
+        scoringType = g.ScoringType;
+        notes = g.Notes;
+        modalOpen = true;
+    }
+
+    private void CloseModal()
+    {
+        modalOpen = false;
+        ResetForm();
+    }
+
+    private void ResetForm()
+    {
+        editingId = null;
+        title = "";
+        notes = null;
+        scoringType = ScoringType.TimeLowest;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(title))
+            return;
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        Game? game;
+        if (editingId is null)
+        {
+            var maxOrder = await db.Games.MaxAsync(g => (int?)g.SortOrder) ?? 0;
+            game = new Game { SortOrder = maxOrder + 1 };
+            db.Games.Add(game);
+        }
+        else
+        {
+            game = await db.Games.FindAsync(editingId.Value);
+            if (game is null)
+                return;
+        }
+
+        game.Title = title.Trim();
+        game.ScoringType = scoringType;
+        game.Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        await db.SaveChangesAsync();
+
+        CloseModal();
+        await SavedAsync();
+    }
+
+    private async Task MoveAsync(int index, int direction)
+    {
+        var ordered = games!.Select(g => g.Id).ToList();
+        (ordered[index], ordered[index + direction]) = (ordered[index + direction], ordered[index]);
+
+        // Renumber everything so ties or gaps in SortOrder can't make a move a no-op.
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var tracked = await db.Games.ToDictionaryAsync(g => g.Id);
+        for (var i = 0; i < ordered.Count; i++)
+            tracked[ordered[i]].SortOrder = i + 1;
+        await db.SaveChangesAsync();
+        await SavedAsync();
+    }
+
+    private async Task ToggleActiveAsync(int id)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var game = await db.Games.FindAsync(id);
+        if (game is null)
+            return;
+        game.IsActive = !game.IsActive;
+        await db.SaveChangesAsync();
+        await SavedAsync();
+    }
+
+    private async Task DeleteAsync(Game g)
+    {
+        var message = g.Scores.Count > 0
+            ? $"Delete {g.Title} and its {g.Scores.Count} score(s)? This can't be undone. (Tip: set it Inactive instead to keep the scores.)"
+            : $"Delete {g.Title}?";
+        if (!await JS.InvokeAsync<bool>("confirm", message))
+            return;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        await db.Games.Where(x => x.Id == g.Id).ExecuteDeleteAsync();
+        await SavedAsync();
+    }
+
+    private async Task SavedAsync()
+    {
+        Notifier.Notify();
+        await LoadAsync();
+    }
+}

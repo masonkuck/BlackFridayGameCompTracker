@@ -1,0 +1,45 @@
+@page "/stats/{Id:int}"
+@inject ScoringService Scoring
+@inject IConfiguration Config
+@inject IJSRuntime JS
+
+<PageTitle>@(player?.Row.PlayerName ?? "Player") · @EventName</PageTitle>
+
+<div class="report-page">
+    <nav class="report-toolbar no-print">
+        <a href="stats"><Icon Name="arrow-left" /> All stats</a>
+        <span class="grow"></span>
+        <button class="btn primary" @onclick="PrintAsync" disabled="@(player is null)"><Icon Name="printer" /> Print</button>
+    </nav>
+
+    @if (!loaded)
+    {
+        <p class="muted">Loading…</p>
+    }
+    else if (player is null)
+    {
+        <p class="muted">That player isn't in the standings. They may have been deactivated.</p>
+    }
+    else
+    {
+        <PlayerReportCard Report="player" EventName="@EventName" />
+    }
+</div>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private PlayerReport? player;
+    private bool loaded;
+
+    private string EventName => Config["EventName"] ?? "Gaming Tournament";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var report = await Scoring.GetReportAsync();
+        player = report.Players.FirstOrDefault(p => p.Row.PlayerId == Id);
+        loaded = true;
+    }
+
+    private async Task PrintAsync() => await JS.InvokeVoidAsync("print");
+}
