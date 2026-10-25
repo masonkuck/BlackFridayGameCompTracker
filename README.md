@@ -4,9 +4,19 @@ A local Blazor Server app for running the Black Friday gaming tournament. It tra
 
 ## Run it
 
+**Easiest (Windows):** double-click `Start.bat`. Before it starts the app, it:
+- installs the .NET 10 SDK if it's missing, through winget or Microsoft's install script;
+- offers to add the firewall rule so phones can connect.
+
+SQLite needs no install; it's built into the app.
+
+Or run it by hand with the .NET 10 SDK installed:
+
 ```powershell
 dotnet run --project src/CompTracker
 ```
+
+Change `"AdminPin"` and `"EventName"` in `src/CompTracker/appsettings.json` before your own event.
 
 The app listens on `http://0.0.0.0:5080`. Open `http://localhost:5080` on this PC or `http://<this-pc-ip>:5080` from other devices. Use `ipconfig` to find the IPv4 address, or just scan the QR code in the dashboard's corner. That card's X hides it, and the QR button in the header brings it back. The address is detected automatically; if it picks the wrong network adapter, set `"JoinUrl": "http://192.168.1.18:5080/"` in `appsettings.json`.
 
