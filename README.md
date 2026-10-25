@@ -40,6 +40,20 @@ New-NetFirewallRule -DisplayName "CompTracker" -Direction Inbound -Protocol TCP 
 - The leaderboard sums points over active games. A tie on points is broken by the number of 1st places.
 - Inactive players and games are hidden from standings, the leaderboard and the todo list, but their scores are kept.
 
+## Sounds & celebrations
+
+The dashboard reacts when a score is saved:
+
+- **Every score:** the game's card glows and a short chime plays.
+- **New leader in a game:** a full-screen "NEW LEADER" card with confetti and a fanfare.
+- **New #1 overall:** a bigger "NEW TOURNAMENT LEADER" card with its own fanfare. If one score does both, they play one after the other.
+
+A new leader only counts when they hold 1st **alone** and took it from someone else. Ties, keeping your own lead and the very first score don't count.
+
+Sound is off by default. Turn it on with the speaker button on the dashboard; each browser remembers the choice. Browsers block audio until someone clicks the page, so after a reload the button turns gold ("Click to enable sound") until you click anywhere. On a TV/kiosk screen you can skip that by launching the browser with `--autoplay-policy=no-user-gesture-required`.
+
+The sounds are synthesized by `tools/make_sounds.py`, which uses only the standard library. Edit it and run `python tools/make_sounds.py` to change them. The output goes to `wwwroot/sounds/`.
+
 ## Fonts & icons
 
 Both are bundled with the app (no internet needed at the party):

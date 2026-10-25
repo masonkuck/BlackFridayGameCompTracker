@@ -1,0 +1,120 @@
+@implements IDisposable
+@inject IJSRuntime JS
+
+@* Full-screen "NEW LEADER" moment on the dashboard. Celebrations queue up and play one at a time. *@
+
+@if (current is not null)
+{
+    var overall = current.Kind == CelebrationKind.OverallLeader;
+    <div class="celebration @(overall ? "overall" : "game")" role="status" aria-live="assertive" @key="showId">
+        <div class="confetti" aria-hidden="true">
+            @foreach (var piece in pieces)
+            {
+                <span style="@piece"></span>
+            }
+        </div>
+        <div class="celebration-card">
+            <div class="celebration-eyebrow">
+                <Icon Name="@(overall ? "trophy" : "crown")" Class="gold" />
+                @(overall ? "New tournament leader" : "New leader")
+            </div>
+            <div class="celebration-name">@current.PlayerName</div>
+            <div class="celebration-detail">
+                @if (overall)
+                {
+                    <text>takes #1 overall with <strong>@current.TotalPoints pts</strong></text>
+                }
+                else
+                {
+                    <text>takes 1st in <strong>@current.GameTitle</strong></text>
+                    <ScoreValue Type="current.ScoringType!.Value" Value="current.Value!.Value" Class="celebration-score" />
+                }
+            </div>
+            @if (current.Dethroned.Count > 0)
+            {
+                <div class="celebration-from">Dethroned @string.Join(" & ", current.Dethroned)</div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private static readonly TimeSpan ShowFor = TimeSpan.FromSeconds(5.5);
+    private static readonly TimeSpan Gap = TimeSpan.FromSeconds(0.4);
+    private static readonly string[] Colors = ["var(--gold)", "var(--accent)", "var(--silver)", "var(--bronze)", "var(--ok)"];
+
+    private readonly Queue<Celebration> queue = new();
+    private readonly CancellationTokenSource cts = new();
+    private Celebration? current;
+    private List<string> pieces = [];
+    private int showId;
+    private bool playing;
+
+    public void Enqueue(IEnumerable<Celebration> celebrations)
+    {
+        foreach (var c in celebrations)
+            queue.Enqueue(c);
+        if (!playing)
+            _ = PlayQueueAsync(cts.Token);
+    }
+
+    private async Task PlayQueueAsync(CancellationToken token)
+    {
+        playing = true;
+        try
+        {
+            while (queue.TryDequeue(out var next))
+            {
+                current = next;
+                showId++;
+                pieces = MakeConfetti();
+                StateHasChanged();
+                await PlaySoundAsync(next.Kind == CelebrationKind.OverallLeader ? "champion" : "crown");
+
+                await Task.Delay(ShowFor, token);
+                current = null;
+                StateHasChanged();
+                await Task.Delay(Gap, token);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            playing = false;
+        }
+    }
+
+    private async Task PlaySoundAsync(string name)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("compTracker.sound.play", name);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    // Each piece gets its own spot, color, size, spin and timing through inline CSS variables.
+    private static List<string> MakeConfetti()
+    {
+        var rng = Random.Shared;
+        return Enumerable.Range(0, 70).Select(_ => string.Join(";",
+            $"--x:{rng.Next(0, 100)}vw",
+            $"--drift:{rng.Next(-15, 16)}vw",
+            FormattableString.Invariant($"--delay:{rng.NextDouble() * 1.2:0.00}s"),
+            FormattableString.Invariant($"--fall:{2.8 + rng.NextDouble() * 2:0.00}s"),
+            $"--spin:{rng.Next(360, 1080)}deg",
+            $"--w:{rng.Next(6, 12)}px",
+            $"--h:{rng.Next(10, 18)}px",
+            $"background:{Colors[rng.Next(Colors.Length)]}")).ToList();
+    }
+
+    public void Dispose()
+    {
+        cts.Cancel();
+        cts.Dispose();
+    }
+}

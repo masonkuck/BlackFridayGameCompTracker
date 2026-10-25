@@ -4,13 +4,22 @@
 @inject ChangeNotifier Notifier
 @inject IConfiguration Config
 @inject AdminSession AdminSession
+@inject IJSRuntime JS
 
 <PageTitle>Leaderboard · @EventName</PageTitle>
 
 <div class="dashboard">
     <header class="dash-header">
         <h1>@EventName</h1>
-        <a class="admin-link" href="admin/games"><Icon Name="gear-six" Title="Admin" /></a>
+        <div class="dash-actions">
+            @* Wired up in app.js; its look follows <html data-sound>. *@
+            <button type="button" class="sound-toggle" data-sound-toggle title="Sound effects">
+                <span class="sound-on"><Icon Name="speaker-high" /> Sound on</span>
+                <span class="sound-off"><Icon Name="speaker-slash" /> Sound off</span>
+                <span class="sound-blocked"><Icon Name="speaker-slash" /> Click to enable sound</span>
+            </button>
+            <a class="admin-link" href="admin/games"><Icon Name="gear-six" Title="Admin" /></a>
+        </div>
     </header>
 
     @if (leaderboard is null)
@@ -59,7 +68,7 @@
                         {
                             var leaders = g.Standings.Where(s => s.Place == 1).ToList();
                             var pct = playerCount == 0 ? 0 : g.Standings.Count * 100 / playerCount;
-                            <a class="game-card" href="games/@g.GameId">
+                            <a class="game-card" href="games/@g.GameId" data-game-id="@g.GameId">
                                 <span class="game-card-head">
                                     <span class="game-card-title">@g.Title</span>
                                     <span class="badge @g.ScoringType">@g.ScoringType.ShortLabel()</span>
@@ -91,11 +100,15 @@
                     <span><Icon Name="game-controller" Class="accent" /> Still to play</span>
                     @if (pageCount > 1)
                     {
-                        <span class="page-dots">
-                            @for (var i = 0; i < pageCount; i++)
-                            {
-                                <span class="dot @(i == pageIndex ? "on" : "")"></span>
-                            }
+                        <span class="pager">
+                            <button type="button" class="pager-btn" title="Previous" @onclick="() => MovePage(-1)"><Icon Name="caret-left" /></button>
+                            <span class="page-dots">
+                                @for (var i = 0; i < pageCount; i++)
+                                {
+                                    <span class="dot @(i == pageIndex ? "on" : "")"></span>
+                                }
+                            </span>
+                            <button type="button" class="pager-btn" title="Next" @onclick="() => MovePage(1)"><Icon Name="caret-right" /></button>
                         </span>
                     }
                 </h2>
@@ -166,6 +179,8 @@
     </div>
 }
 
+<CelebrationOverlay @ref="celebration" />
+
 @code {
     private const int PageSize = 3;
     private static readonly TimeSpan RotateEvery = TimeSpan.FromSeconds(7);
@@ -177,9 +192,11 @@
     private IReadOnlyList<RecentScore> recent = [];
     private int playerCount;
     private int pageIndex;
+    private CelebrationOverlay? celebration;
     private int pageCount => (remaining.Count + PageSize - 1) / PageSize;
 
     private readonly CancellationTokenSource cts = new();
+    private CancellationTokenSource? rotateCts;
 
     private string EventName => Config["EventName"] ?? "Gaming Tournament";
 
@@ -189,12 +206,13 @@
         AdminSession.Lock();
         await LoadAsync();
         Notifier.Changed += OnDataChanged;
+        Notifier.ScorePosted += OnScorePosted;
     }
 
     protected override void OnAfterRender(bool firstRender)
     {
         if (firstRender)
-            _ = RotateLoopAsync(cts.Token);
+            RestartRotation();
     }
 
     private async Task LoadAsync()
@@ -211,6 +229,23 @@
     }
 
     private static string PlaceClass(int place) => ScoreFormat.PlaceClass(place);
+
+    // Manual paging restarts the timer so the page you picked stays up for a full interval.
+    private void MovePage(int step)
+    {
+        if (pageCount <= 1)
+            return;
+        pageIndex = (pageIndex + step + pageCount) % pageCount;
+        RestartRotation();
+    }
+
+    private void RestartRotation()
+    {
+        rotateCts?.Cancel();
+        rotateCts?.Dispose();
+        rotateCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+        _ = RotateLoopAsync(rotateCts.Token);
+    }
 
     private async Task RotateLoopAsync(CancellationToken token)
     {
@@ -239,10 +274,27 @@
         StateHasChanged();
     });
 
+    // A ping and a card glow for every posted score; a new leader gets the full celebration (and its own sound) instead.
+    private void OnScorePosted(ScorePosted posted) => _ = InvokeAsync(async () =>
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("compTracker.flashGame", posted.GameId);
+            if (posted.Celebrations.Count == 0)
+                await JS.InvokeVoidAsync("compTracker.sound.play", "ping");
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        celebration?.Enqueue(posted.Celebrations);
+    });
+
     public void Dispose()
     {
         Notifier.Changed -= OnDataChanged;
+        Notifier.ScorePosted -= OnScorePosted;
         cts.Cancel();
+        rotateCts?.Dispose();
         cts.Dispose();
     }
 }

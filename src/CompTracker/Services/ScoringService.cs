@@ -32,6 +32,9 @@ public class ScoringService(IDbContextFactory<AppDbContext> dbFactory)
         return BuildLeaderboard(players, games, table);
     }
 
+    public async Task<LeaderSnapshot> GetLeaderSnapshotAsync(int gameId) =>
+        new(await GetGameStandingsAsync(gameId), await GetLeaderboardAsync());
+
     public async Task<IReadOnlyList<TodoRow>> GetTodoAsync()
     {
         var (players, games, _) = await LoadAsync();

@@ -47,9 +47,10 @@ html, body {
 .accent { color: var(--accent-hover); }
 
 /* Score type icon in front of every displayed score: clock = time, star = points. */
-.score-value { display: inline-flex; align-items: center; gap: .3em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* Plain inline (not inline-flex) so the number sits on the same baseline as the text around it. */
+.score-value { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .score-icon { opacity: .8; }
-.score-value .score-icon { width: .95em; height: .95em; }
+.score-value .score-icon { width: .95em; height: .95em; margin-right: .3em; vertical-align: -0.12em; }
 /* Top-aligned so the icon lines up with the boxes, not the labels under the time boxes. */
 .score-entry { display: inline-flex; align-items: flex-start; gap: .5rem; }
 .score-entry > .score-icon { color: var(--muted); width: 1.2rem; height: 1.2rem; margin-top: .5rem; }
@@ -255,7 +256,26 @@ textarea.input { resize: vertical; }
     background: linear-gradient(90deg, var(--gold), var(--accent-hover));
     -webkit-background-clip: text; background-clip: text; color: transparent;
 }
+.dash-actions { display: flex; align-items: center; gap: 1rem; }
 .admin-link { color: var(--muted); font-size: 1.5rem; opacity: .5; }
+
+/* Sound toggle: app.js sets <html data-sound="off|on|blocked">; only the matching label shows. */
+.sound-toggle {
+    font: inherit; font-size: .9rem;
+    background: transparent; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: .3rem .8rem; cursor: pointer;
+    display: inline-flex; align-items: center;
+}
+.sound-toggle:hover { color: var(--text); border-color: var(--accent); }
+.sound-toggle > span { display: none; align-items: center; gap: .4rem; }
+html:not([data-sound]) .sound-off,
+html[data-sound=off] .sound-off,
+html[data-sound=on] .sound-on,
+html[data-sound=blocked] .sound-blocked { display: inline-flex; }
+html[data-sound=on] .sound-toggle { color: var(--ok); border-color: rgba(52, 211, 153, .4); }
+html[data-sound=blocked] .sound-toggle { color: var(--gold); border-color: var(--gold); animation: sound-nudge 2s ease-in-out infinite; }
+@keyframes sound-nudge { 50% { box-shadow: 0 0 0 4px rgba(251, 191, 36, .2); } }
 .admin-link:hover { opacity: 1; text-decoration: none; }
 .big-empty { font-size: 1.3rem; }
 
@@ -294,6 +314,15 @@ textarea.input { resize: vertical; }
 .progress-fill { display: block; height: 100%; background: var(--accent); transition: width .6s ease; }
 
 .page-dots { display: inline-flex; gap: .35rem; }
+.pager { display: inline-flex; align-items: center; gap: .5rem; }
+.pager-btn {
+    display: inline-grid; place-items: center;
+    width: 2rem; height: 2rem; padding: 0;
+    background: var(--surface-2); color: var(--muted);
+    border: 1px solid var(--border); border-radius: 50%;
+    font-size: 1rem; cursor: pointer;
+}
+.pager-btn:hover { color: var(--text); border-color: var(--accent); }
 .dot { width: .5rem; height: .5rem; border-radius: 50%; background: var(--border); }
 .dot.on { background: var(--accent); }
 
@@ -330,6 +359,73 @@ textarea.input { resize: vertical; }
 .leader-result { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .game-card-foot { display: flex; align-items: center; gap: .6rem; }
 .game-card-foot .progress { flex: 1; max-width: none; }
+/* Added by app.js when a score is posted in that game. */
+.game-card.flash { animation: card-flash 2.4s ease-out; }
+@keyframes card-flash {
+    0%, 15% { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(251, 191, 36, .45), 0 0 24px rgba(251, 191, 36, .35); }
+    100% { border-color: var(--border); box-shadow: none; }
+}
+
+/* "NEW LEADER" overlay (Components/CelebrationOverlay.razor) */
+.celebration {
+    position: fixed; inset: 0; z-index: 100;
+    display: grid; place-items: center;
+    padding: 16px;
+    background: radial-gradient(circle at center, rgba(13, 15, 23, .7), rgba(13, 15, 23, .94));
+    animation: celebration-fade 5.5s ease forwards;
+    overflow: hidden;
+}
+@keyframes celebration-fade { 0% { opacity: 0; } 6%, 90% { opacity: 1; } 100% { opacity: 0; } }
+.celebration-card {
+    position: relative;
+    text-align: center;
+    padding: clamp(1.5rem, 4vw, 3rem) clamp(1.5rem, 6vw, 5rem);
+    background: var(--surface);
+    border: 2px solid var(--gold);
+    border-radius: 20px;
+    box-shadow: 0 0 60px rgba(251, 191, 36, .35);
+    max-width: min(900px, 100%);
+    animation: celebration-pop .7s cubic-bezier(.2, 1.6, .4, 1) both;
+}
+.celebration.overall .celebration-card { border-color: var(--accent-hover); box-shadow: 0 0 80px rgba(139, 92, 246, .5), 0 0 30px rgba(251, 191, 36, .3); }
+@keyframes celebration-pop { from { transform: scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
+.celebration-eyebrow {
+    display: inline-flex; align-items: center; gap: .5rem;
+    text-transform: uppercase; letter-spacing: .2em;
+    font-size: clamp(1rem, 2.2vw, 1.6rem);
+    color: var(--gold);
+}
+.celebration-eyebrow .icon { font-size: 1.6em; animation: crown-bob 1.2s ease-in-out infinite; }
+@keyframes crown-bob { 50% { transform: translateY(-6px) rotate(-6deg); } }
+.celebration-name {
+    font-size: clamp(2.5rem, 9vw, 6.5rem);
+    line-height: 1.1;
+    margin: .5rem 0;
+    overflow-wrap: anywhere;
+    background: linear-gradient(90deg, var(--gold), var(--accent-hover));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.celebration-detail { font-size: clamp(1.1rem, 2.6vw, 1.9rem); display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: .6rem; }
+.celebration-score { color: var(--gold); }
+.celebration-from { margin-top: 1rem; color: var(--muted); font-size: clamp(.95rem, 1.8vw, 1.3rem); }
+
+.confetti { position: absolute; inset: 0; pointer-events: none; }
+.confetti span {
+    position: absolute; top: -20px; left: var(--x);
+    width: var(--w); height: var(--h);
+    border-radius: 2px;
+    opacity: 0;
+    animation: confetti-fall var(--fall) linear var(--delay) forwards;
+}
+@keyframes confetti-fall {
+    0% { opacity: 1; transform: translate(0, 0) rotate(0); }
+    85% { opacity: 1; }
+    100% { opacity: 0; transform: translate(var(--drift), 105vh) rotate(var(--spin)); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .confetti { display: none; }
+    .celebration-card, .celebration-eyebrow .icon, .game-card.flash, html[data-sound=blocked] .sound-toggle { animation: none; }
+}
 
 /* Single-game standings page */
 .back-link { color: var(--muted); font-size: 1.1rem; }

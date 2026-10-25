@@ -201,6 +201,8 @@ else if (game is not null)
             return;
         }
 
+        var before = await Scoring.GetLeaderSnapshotAsync(Id);
+
         await using var db = await DbFactory.CreateDbContextAsync();
         var score = await db.Scores.FirstOrDefaultAsync(s => s.GameId == Id && s.PlayerId == row.PlayerId);
         if (score is null)
@@ -212,7 +214,9 @@ else if (game is not null)
         score.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        Notifier.Notify();
+        var after = await Scoring.GetLeaderSnapshotAsync(Id);
+        var celebrations = Celebrations.Detect(before, after, game!.Title, game.ScoringType, game.IsActive);
+        Notifier.Notify(new ScorePosted(Id, celebrations));
         await LoadAsync();
     }
 
