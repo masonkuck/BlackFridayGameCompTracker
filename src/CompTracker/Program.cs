@@ -15,6 +15,7 @@ builder.Services.AddDbContextFactory<AppDbContext>(o => o.UseSqlite(connection.T
 builder.Services.AddSingleton<ScoringService>();
 builder.Services.AddSingleton<ChangeNotifier>();
 builder.Services.AddScoped<AdminSession>();
+builder.Services.AddSingleton<JoinLink>();
 
 // Backups: a relative folder is resolved against the content root, like the database.
 var backupOptions = builder.Configuration.GetSection("Backups").Get<BackupOptions>() ?? new BackupOptions();

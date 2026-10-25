@@ -5,6 +5,7 @@
 @inject IConfiguration Config
 @inject AdminSession AdminSession
 @inject IJSRuntime JS
+@inject JoinLink Join
 
 <PageTitle>Leaderboard · @EventName</PageTitle>
 
@@ -12,6 +13,10 @@
     <header class="dash-header">
         <h1>@EventName</h1>
         <div class="dash-actions">
+            @if (joinUrl is not null)
+            {
+                <button type="button" class="qr-toggle" data-qr-toggle title="Show the QR code for phones"><Icon Name="qr-code" /></button>
+            }
             @* Wired up in app.js; its look follows <html data-sound>. *@
             <button type="button" class="sound-toggle" data-sound-toggle title="Sound effects">
                 <span class="sound-on"><Icon Name="speaker-high" /> Sound on</span>
@@ -179,6 +184,20 @@
     </div>
 }
 
+@if (joinUrl is not null)
+{
+    @* Shown/hidden by app.js (<html data-qr>), remembered per browser. *@
+    <aside class="join-card" aria-label="Open on your phone">
+        <button type="button" class="join-close" data-qr-toggle title="Hide"><Icon Name="x-circle" /></button>
+        <div class="join-qr">@((MarkupString)Join.QrSvg(joinUrl))</div>
+        <div class="join-text">
+            <strong>Live scores on your phone</strong>
+            <span class="muted">Scan, or go to</span>
+            <code>@joinUrl.TrimEnd('/')</code>
+        </div>
+    </aside>
+}
+
 <CelebrationOverlay @ref="celebration" />
 
 @code {
@@ -193,6 +212,7 @@
     private int playerCount;
     private int pageIndex;
     private CelebrationOverlay? celebration;
+    private string? joinUrl;
     private int pageCount => (remaining.Count + PageSize - 1) / PageSize;
 
     private readonly CancellationTokenSource cts = new();
@@ -204,6 +224,7 @@
     {
         // Leaving admin for the dashboard ends the admin session; the PIN is needed again.
         AdminSession.Lock();
+        joinUrl = Join.Url;
         await LoadAsync();
         Notifier.Changed += OnDataChanged;
         Notifier.ScorePosted += OnScorePosted;

@@ -30,6 +30,21 @@ window.compTracker = {
     },
 };
 
+// ---- Dashboard QR card: the X hides it, the QR button in the header brings it back (remembered per browser) ----
+(() => {
+    const storageKey = 'compTracker.qr';
+    const render = (shown) => { document.documentElement.dataset.qr = shown ? 'shown' : 'hidden'; };
+    let shown = true;
+    try { shown = localStorage.getItem(storageKey) !== 'hidden'; } catch { }
+    render(shown);
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest?.('[data-qr-toggle]')) return;
+        shown = !shown;
+        try { localStorage.setItem(storageKey, shown ? 'shown' : 'hidden'); } catch { }
+        render(shown);
+    });
+})();
+
 // ---- Dashboard sound effects (files in wwwroot/sounds, made by tools/make_sounds.py) ----
 // Browsers block audio until someone clicks or presses a key on the page, so sound is opt-in with the
 // speaker button and the choice is remembered per browser. After a reload any click re-arms it.

@@ -8,9 +8,9 @@ A local Blazor Server app for running the Black Friday gaming tournament. It tra
 dotnet run --project src/CompTracker
 ```
 
-The app listens on `http://0.0.0.0:5080`. Open `http://localhost:5080` on this PC or `http://<this-pc-ip>:5080` from other devices. Use `ipconfig` to find the IPv4 address.
+The app listens on `http://0.0.0.0:5080`. Open `http://localhost:5080` on this PC or `http://<this-pc-ip>:5080` from other devices. Use `ipconfig` to find the IPv4 address, or just scan the QR code in the dashboard's corner. That card's X hides it, and the QR button in the header brings it back. The address is detected automatically; if it picks the wrong network adapter, set `"JoinUrl": "http://192.168.1.18:5080/"` in `appsettings.json`.
 
-The SQLite database (`src/CompTracker/comptracker.db`) is created and migrated automatically on first start. To back up, copy that file. To start fresh, stop the app and delete it.
+The SQLite database (`src/CompTracker/comptracker.db`) is created and migrated automatically on first start. Backups are automatic (see below). To start fresh, stop the app and delete it.
 
 ### Allow other devices on the network (one time, admin PowerShell)
 
@@ -79,6 +79,7 @@ To restore a backup:
 Both are bundled with the app (no internet needed at the party):
 
 - **Electrolize** font by Cyreal, SIL Open Font License (`wwwroot/fonts/Electrolize-OFL.txt`).
+- QR codes by **QRCoder**, MIT license (NuGet package).
 - **Phosphor** "fill" icons, MIT license. They're inlined in `Components/Icon.razor`; use `<Icon Name="trophy" />`. To add one, copy the path from `@phosphor-icons/core/assets/fill/<name>-fill.svg`.
 
 ## Development
