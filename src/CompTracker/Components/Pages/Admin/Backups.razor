@@ -1,0 +1,128 @@
+@page "/admin/backups"
+@inject BackupService BackupStore
+@inject IJSRuntime JS
+
+<PageTitle>Backups · Comp Tracker</PageTitle>
+
+<div class="page-head">
+    <h1>Backups</h1>
+    <span class="form-row">
+        <button class="btn" @onclick="BackUpNowAsync" disabled="@busy">Back up now</button>
+        <button class="btn primary" @onclick="DownloadFreshAsync" disabled="@busy">Download a fresh backup</button>
+    </span>
+</div>
+
+<p class="muted">
+    A snapshot is saved every @Every when something has changed, and once more when the app shuts down.
+    The newest @BackupStore.Keep are kept.
+</p>
+<p class="muted small">
+    Saving to <code class="backup-folder">@BackupStore.Folder</code>. Change <code>Backups:Folder</code> in <code>appsettings.json</code> to put them
+    somewhere else (another drive or a USB stick works), then restart the app.
+</p>
+
+@if (error is not null)
+{
+    <p class="error">@error</p>
+}
+else if (message is not null)
+{
+    <p class="ok-text"><Icon Name="check-circle" /> @message</p>
+}
+
+@if (files.Count == 0)
+{
+    <p class="muted">No backups yet.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr><th>Taken</th><th>Size</th><th class="actions"></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var f in files)
+            {
+                <tr>
+                    <td>@f.CreatedAt.ToString("ddd MMM d, h:mm:ss tt")</td>
+                    <td class="muted">@Size(f.SizeBytes)</td>
+                    <td class="actions"><button class="btn sm" @onclick="() => DownloadAsync(f.Name)">Download</button></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<details class="restore-help">
+    <summary>How to restore a backup</summary>
+    <ol>
+        <li>Stop the app (Ctrl+C in its window).</li>
+        <li>In <code>src/CompTracker</code>, delete <code>comptracker.db-wal</code> and <code>comptracker.db-shm</code> if they exist.</li>
+        <li>Copy the backup over <code>comptracker.db</code> (rename it to exactly that).</li>
+        <li>Start the app again.</li>
+    </ol>
+</details>
+
+@code {
+    private IReadOnlyList<BackupFile> files = [];
+    private bool busy;
+    private string? message, error;
+
+    protected override void OnInitialized() => Refresh();
+
+    private void Refresh()
+    {
+        try
+        {
+            files = BackupStore.List();
+        }
+        catch (Exception ex)
+        {
+            files = [];
+            error = $"Can't read the backup folder: {ex.Message}";
+        }
+    }
+
+    private async Task<BackupFile?> CreateAsync()
+    {
+        busy = true;
+        message = error = null;
+        try
+        {
+            return await BackupStore.CreateAsync();
+        }
+        catch (Exception ex)
+        {
+            error = $"Backup failed: {ex.Message}";
+            return null;
+        }
+        finally
+        {
+            busy = false;
+            Refresh();
+        }
+    }
+
+    private async Task BackUpNowAsync()
+    {
+        if (await CreateAsync() is { } file)
+            message = $"Saved {file.Name}.";
+    }
+
+    private async Task DownloadFreshAsync()
+    {
+        if (await CreateAsync() is { } file)
+            await DownloadAsync(file.Name);
+    }
+
+    private async Task DownloadAsync(string name)
+    {
+        await JS.InvokeVoidAsync("compTracker.download", BackupStore.CreateDownloadLink(name));
+    }
+
+    private string Every => BackupStore.Interval.TotalMinutes == 1 ? "minute" : $"{BackupStore.Interval.TotalMinutes} minutes";
+
+    private static string Size(long bytes) => bytes < 1024 * 1024
+        ? $"{Math.Max(1, bytes / 1024)} KB"
+        : $"{bytes / (1024.0 * 1024):0.0} MB";
+}

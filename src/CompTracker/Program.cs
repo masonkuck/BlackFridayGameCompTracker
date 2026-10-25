@@ -16,6 +16,13 @@ builder.Services.AddSingleton<ScoringService>();
 builder.Services.AddSingleton<ChangeNotifier>();
 builder.Services.AddScoped<AdminSession>();
 
+// Backups: a relative folder is resolved against the content root, like the database.
+var backupOptions = builder.Configuration.GetSection("Backups").Get<BackupOptions>() ?? new BackupOptions();
+backupOptions.Folder = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, backupOptions.Folder));
+builder.Services.AddSingleton(backupOptions);
+builder.Services.AddSingleton<BackupService>();
+builder.Services.AddHostedService<BackupWorker>();
+
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
@@ -35,6 +42,10 @@ app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages:
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+app.MapGet("/backups/download/{token}", (string token, BackupService backups) =>
+    backups.RedeemDownloadLink(token) is { } path
+        ? Results.File(path, "application/octet-stream", Path.GetFileName(path))
+        : Results.NotFound());
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

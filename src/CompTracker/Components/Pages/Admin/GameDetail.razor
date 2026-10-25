@@ -109,6 +109,7 @@ else if (game is not null)
 
     private class Row
     {
+        public int GameId { get; init; }
         public int PlayerId { get; init; }
         public string PlayerName { get; init; } = "";
         public Standing? Standing { get; init; }
@@ -142,27 +143,33 @@ else if (game is not null)
         if (game is null)
             return;
 
+        // Keep anything typed but not saved yet in other rows when the table reloads after a save.
+        var pending = rows.Count > 0 && rows[0].GameId == Id
+            ? rows.Where(IsDirty).ToDictionary(r => r.PlayerId)
+            : [];
+
         var players = await db.Players.AsNoTracking().Where(p => p.IsActive).ToListAsync();
         var standings = (await Scoring.GetGameStandingsAsync(Id)).ToDictionary(s => s.PlayerId);
 
-        // Ranked players first (by place), then anyone who hasn't played yet, alphabetically.
+        // Alphabetical so rows never jump around while scores are being entered; the Place column shows the ranking.
         rows = players
             .Select(p =>
             {
                 standings.TryGetValue(p.Id, out var s);
                 var text = s is null ? "" : ScoreFormat.Format(game.ScoringType, s.Value);
+                pending.TryGetValue(p.Id, out var draft);
                 return new Row
                 {
+                    GameId = Id,
                     PlayerId = p.Id,
                     PlayerName = p.Name,
                     Standing = s,
                     Saved = text,
-                    Draft = text,
-                    Time = s is null ? new TimeParts() : TimeParts.FromMilliseconds(s.Value),
+                    Draft = draft?.Draft ?? text,
+                    Time = draft?.Time ?? (s is null ? new TimeParts() : TimeParts.FromMilliseconds(s.Value)),
                 };
             })
-            .OrderBy(r => r.Standing?.Place ?? int.MaxValue)
-            .ThenBy(r => r.PlayerName)
+            .OrderBy(r => r.PlayerName, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 

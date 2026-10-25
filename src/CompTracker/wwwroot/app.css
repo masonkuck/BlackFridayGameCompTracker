@@ -242,6 +242,12 @@ textarea.input { resize: vertical; }
 .badge.ScoreLowest { color: var(--low); }
 .badge.inactive-badge { color: var(--muted); }
 
+/* ---------- Backups ---------- */
+.backup-folder { overflow-wrap: anywhere; }
+.restore-help { margin-top: 1.5rem; color: var(--muted); }
+.restore-help summary { cursor: pointer; color: var(--text); }
+.restore-help ol { margin: .5rem 0 0; padding-left: 1.4rem; line-height: 1.7; }
+
 /* ---------- Points editor ---------- */
 .points-editor { max-width: 360px; }
 .points-row { display: flex; align-items: center; gap: .75rem; }

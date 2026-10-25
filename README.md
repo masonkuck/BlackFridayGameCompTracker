@@ -54,6 +54,26 @@ Sound is off by default. Turn it on with the speaker button on the dashboard; ea
 
 The sounds are synthesized by `tools/make_sounds.py`, which uses only the standard library. Edit it and run `python tools/make_sounds.py` to change them. The output goes to `wwwroot/sounds/`.
 
+## Backups
+
+While the app runs, it saves a snapshot of the database every 15 minutes, but only if something changed. It also saves one when the app shuts down (Ctrl+C). The **Backups** admin page lists the snapshots and has **Back up now** and **Download a fresh backup** buttons. Downloading works from a phone too, which is an easy way to get a copy off the PC.
+
+Settings live in `appsettings.json`:
+
+```json
+"Backups": {
+  "Folder": "backups",       // relative to src/CompTracker, or absolute, e.g. "E:\\CompTracker Backups"
+  "IntervalMinutes": 15,
+  "Keep": 200                // older snapshots are deleted
+}
+```
+
+To restore a backup:
+1. Stop the app.
+2. Delete `comptracker.db-wal` and `comptracker.db-shm`.
+3. Copy the backup over `comptracker.db`.
+4. Start the app again.
+
 ## Fonts & icons
 
 Both are bundled with the app (no internet needed at the party):

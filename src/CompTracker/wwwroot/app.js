@@ -9,6 +9,16 @@ window.compTracker = {
         target?.select?.();
     },
 
+    // Download a file without leaving the page.
+    download(url) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '';
+        document.body.append(a);
+        a.click();
+        a.remove();
+    },
+
     // Briefly glow a dashboard game card when a score is posted in it.
     flashGame(gameId) {
         const card = document.querySelector(`.game-card[data-game-id="${gameId}"]`);
