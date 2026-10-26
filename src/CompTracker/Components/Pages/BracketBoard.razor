@@ -1,0 +1,132 @@
+@page "/brackets/{Id:int}"
+@implements IDisposable
+@inject ScoringService Scoring
+@inject ChangeNotifier Notifier
+@inject IConfiguration Config
+
+<PageTitle>@(view?.Game.Title ?? "Bracket") · @EventName</PageTitle>
+
+@* Read-only, live-updating bracket for one bracket game (opened from its dashboard card). *@
+<div class="dashboard game-board bracket-board">
+    <header class="dash-header">
+        <a href="/" class="back-link"><Icon Name="arrow-left" /> Dashboard</a>
+    </header>
+
+    @if (!loaded)
+    {
+        <p class="muted">Loading…</p>
+    }
+    else if (view is null)
+    {
+        <p class="muted big-empty">That game doesn't exist anymore.</p>
+    }
+    else
+    {
+        <div class="board-title">
+            <h1>@view.Game.Title</h1>
+            <span class="badge Bracket">@ScoringType.Bracket.Label()</span>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(view.Game.Notes))
+        {
+            <p class="muted">@view.Game.Notes</p>
+        }
+
+        @if (view.State is not { } state)
+        {
+            <p class="muted big-empty">The bracket hasn't been drawn yet.</p>
+        }
+        else
+        {
+            @if (state.ChampionId is { } champ)
+            {
+                <div class="champion-banner">
+                    <Icon Name="crown" Class="gold" />
+                    <span class="champion-name">@view.Name(champ)</span>
+                    <span class="muted">is the champion</span>
+                </div>
+            }
+            else if (state.Ready.Any())
+            {
+                <div class="up-next">
+                    <span class="up-next-label"><Icon Name="sword" /> Up next</span>
+                    @foreach (var m in state.Ready)
+                    {
+                        <span class="chip up-next-match">
+                            <strong>@view.Name(m.A.PlayerId)</strong> <span class="muted">vs</span> <strong>@view.Name(m.B.PlayerId)</strong>
+                            <span class="muted small">· @state.RoundName(m)</span>
+                        </span>
+                    }
+                </div>
+            }
+
+            <div class="panel bracket-panel">
+                <BracketTree View="view" />
+            </div>
+
+            <section class="panel bracket-places">
+                <h2><span><Icon Name="trophy" Class="gold" /> Places</span></h2>
+                @{
+                    var placed = view.Standings.Select(s => s.PlayerId).ToHashSet();
+                    var stillIn = state.Entrants.Where(id => !placed.Contains(id)).Select(view.Name).Order().ToList();
+                }
+                @if (stillIn.Count > 0)
+                {
+                    <div class="finished">
+                        <span class="muted">Still in:</span>
+                        @foreach (var name in stillIn)
+                        {
+                            <span class="chip">@name</span>
+                        }
+                    </div>
+                }
+                @if (view.Standings.Count == 0)
+                {
+                    <p class="muted">Nobody's been knocked out yet.</p>
+                }
+                else
+                {
+                    <ol class="leaderboard">
+                        @foreach (var st in view.Standings)
+                        {
+                            <li class="lb-row board-row rank-@Math.Min(st.Place, 4)">
+                                <span class="lb-rank">@st.Place</span>
+                                <span class="lb-name">@st.PlayerName</span>
+                                <span class="lb-points">@st.Points<small>pts</small></span>
+                            </li>
+                        }
+                    </ol>
+                }
+            </section>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private BracketView? view;
+    private bool loaded;
+
+    private string EventName => Config["EventName"] ?? "Gaming Tournament";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+        Notifier.Changed -= OnDataChanged;
+        Notifier.Changed += OnDataChanged;
+    }
+
+    private async Task LoadAsync()
+    {
+        view = await Scoring.GetBracketAsync(Id);
+        loaded = true;
+    }
+
+    private void OnDataChanged() => _ = InvokeAsync(async () =>
+    {
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => Notifier.Changed -= OnDataChanged;
+}

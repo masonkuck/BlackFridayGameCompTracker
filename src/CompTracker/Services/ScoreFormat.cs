@@ -15,8 +15,12 @@ public static class ScoreFormat
             ? TryParseTime(input, out value)
             : TryParseNumber(input, out value);
 
-    public static string Format(ScoringType type, decimal value) =>
-        type == ScoringType.TimeLowest ? FormatTime(value) : FormatNumber(value);
+    public static string Format(ScoringType type, decimal value) => type switch
+    {
+        ScoringType.TimeLowest => FormatTime(value),
+        ScoringType.Bracket => Ordinal((int)value),   // a bracket "score" is the finishing place
+        _ => FormatNumber(value),
+    };
 
     // A difference between two results, e.g. "0.4s" or "1:02.5" for times, "1,250" for scores.
     public static string FormatGap(ScoringType type, decimal gap)

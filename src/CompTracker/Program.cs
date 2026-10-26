@@ -17,6 +17,7 @@ builder.Services.AddSingleton<ScoringService>();
 builder.Services.AddSingleton<ChangeNotifier>();
 builder.Services.AddScoped<AdminSession>();
 builder.Services.AddSingleton<JoinLink>();
+builder.Services.AddSingleton<BracketAdmin>();
 
 // Backups: a relative folder is resolved against the content root, like the database.
 var backupOptions = builder.Configuration.GetSection("Backups").Get<BackupOptions>() ?? new BackupOptions();

@@ -17,11 +17,45 @@ namespace CompTracker.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
 
+            modelBuilder.Entity("CompTracker.Data.Entities.BracketResult", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("DecidedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("GameId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("MatchKey")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("WinnerId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WinnerId");
+
+                    b.HasIndex("GameId", "MatchKey")
+                        .IsUnique();
+
+                    b.ToTable("BracketResults");
+                });
+
             modelBuilder.Entity("CompTracker.Data.Entities.Game", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("BracketSlots")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("INTEGER");
@@ -167,6 +201,25 @@ namespace CompTracker.Data.Migrations
                     b.ToTable("Scores");
                 });
 
+            modelBuilder.Entity("CompTracker.Data.Entities.BracketResult", b =>
+                {
+                    b.HasOne("CompTracker.Data.Entities.Game", "Game")
+                        .WithMany("BracketResults")
+                        .HasForeignKey("GameId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CompTracker.Data.Entities.Player", "Winner")
+                        .WithMany()
+                        .HasForeignKey("WinnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Game");
+
+                    b.Navigation("Winner");
+                });
+
             modelBuilder.Entity("CompTracker.Data.Entities.Score", b =>
                 {
                     b.HasOne("CompTracker.Data.Entities.Game", "Game")
@@ -188,6 +241,8 @@ namespace CompTracker.Data.Migrations
 
             modelBuilder.Entity("CompTracker.Data.Entities.Game", b =>
                 {
+                    b.Navigation("BracketResults");
+
                     b.Navigation("Scores");
                 });
 

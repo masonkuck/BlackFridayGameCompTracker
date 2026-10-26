@@ -1,4 +1,5 @@
-@* A displayed score with its type icon in front: a clock for speedrun times, a star for point scores. *@
+@* A displayed score with its type icon in front: a clock for speedrun times, a star for point scores,
+   a bracket for bracket finishes. *@
 
 <span class="score-value @Class"><Icon Name="@IconName(Type)" Class="score-icon" />@ScoreFormat.Format(Type, Value)</span>
 
@@ -7,5 +8,10 @@
     [Parameter, EditorRequired] public decimal Value { get; set; }
     [Parameter] public string? Class { get; set; }
 
-    public static string IconName(ScoringType type) => type == ScoringType.TimeLowest ? "clock" : "star";
+    public static string IconName(ScoringType type) => type switch
+    {
+        ScoringType.TimeLowest => "clock",
+        ScoringType.Bracket => "tree-structure",
+        _ => "star",
+    };
 }

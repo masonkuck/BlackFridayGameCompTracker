@@ -73,13 +73,30 @@
                         @foreach (var g in games)
                         {
                             var leaders = g.Standings.Where(s => s.Place == 1).ToList();
-                            var pct = playerCount == 0 ? 0 : g.Standings.Count * 100 / playerCount;
-                            <a class="game-card" href="games/@g.GameId" data-game-id="@g.GameId">
+                            var isBracket = g.ScoringType == ScoringType.Bracket;
+                            var bracket = isBracket ? brackets.GetValueOrDefault(g.GameId) : null;
+                            var total = bracket?.Entrants ?? playerCount;
+                            var pct = total == 0 ? 0 : g.Standings.Count * 100 / total;
+                            <a class="game-card" href="@(isBracket ? "brackets" : "games")/@g.GameId" data-game-id="@g.GameId">
                                 <span class="game-card-head">
                                     <span class="game-card-title">@g.Title</span>
                                     <span class="badge @g.ScoringType">@g.ScoringType.ShortLabel()</span>
                                 </span>
-                                @if (leaders.Count == 0)
+                                @if (isBracket && leaders.Count == 0)
+                                {
+                                    <span class="game-card-leader muted">
+                                        @if (bracket is null)
+                                        {
+                                            <text>Bracket not drawn yet</text>
+                                        }
+                                        else
+                                        {
+                                            <Icon Name="sword" />
+                                            <span class="leader-name">@(bracket.Next is null ? $"{bracket.StillIn} still in" : $"Next: {bracket.Next}")</span>
+                                        }
+                                    </span>
+                                }
+                                else if (leaders.Count == 0)
                                 {
                                     <span class="game-card-leader muted">No scores yet</span>
                                 }
@@ -93,7 +110,7 @@
                                 }
                                 <span class="game-card-foot">
                                     <span class="progress"><span class="progress-fill" style="width:@(pct)%"></span></span>
-                                    <span class="muted small">@g.Standings.Count/@playerCount</span>
+                                    <span class="muted small" title="@(isBracket ? "knocked out" : "played")">@g.Standings.Count/@total</span>
                                 </span>
                             </a>
                         }
@@ -171,10 +188,23 @@
                         {
                             <span class="ticker-item">
                                 <strong>@r.Standing.PlayerName</strong>
-                                <span class="muted">posted</span>
-                                <ScoreValue Type="r.Game.ScoringType" Value="r.Standing.Value" Class="accent" />
-                                <span class="muted">in</span> @r.Game.Title
-                                <span class="ticker-place @PlaceClass(r.Standing.Place)">@ScoreFormat.Ordinal(r.Standing.Place)</span>
+                                @if (r.Game.ScoringType == ScoringType.Bracket)
+                                {
+                                    <span class="muted">@(r.Standing.Place == 1 ? "won the" : "finished")</span>
+                                    @if (r.Standing.Place != 1)
+                                    {
+                                        <ScoreValue Type="r.Game.ScoringType" Value="r.Standing.Value" Class="accent" />
+                                        <span class="muted">in the</span>
+                                    }
+                                    @r.Game.Title <span class="muted">bracket</span>
+                                }
+                                else
+                                {
+                                    <span class="muted">posted</span>
+                                    <ScoreValue Type="r.Game.ScoringType" Value="r.Standing.Value" Class="accent" />
+                                    <span class="muted">in</span> @r.Game.Title
+                                    <span class="ticker-place @PlaceClass(r.Standing.Place)">@ScoreFormat.Ordinal(r.Standing.Place)</span>
+                                }
                                 <span class="muted small">@r.Standing.UpdatedAt.ToLocalTime().ToString("h:mm tt")</span>
                             </span>
                         }
@@ -211,6 +241,7 @@
     private IReadOnlyList<GameSummary> games = [];
     private IReadOnlyList<RecentScore> recent = [];
     private int playerCount;
+    private IReadOnlyDictionary<int, BracketSummary> brackets = new Dictionary<int, BracketSummary>();
     private int pageIndex;
     private CelebrationOverlay? celebration;
     private string? joinUrl;
@@ -246,6 +277,7 @@
         games = data.Games;
         recent = data.Recent;
         playerCount = data.PlayerCount;
+        brackets = data.Brackets;
         if (pageIndex >= pageCount)
             pageIndex = 0;
     }

@@ -75,7 +75,17 @@ else
                     </td>
                     <td><span class="badge @g.ScoringType">@g.ScoringType.ShortLabel()</span></td>
                     <td class="nowrap">
-                        <span class="@(done == activePlayerIds.Count && done > 0 ? "ok-text" : "")">@done / @activePlayerIds.Count</span>
+                        @if (g.ScoringType == ScoringType.Bracket)
+                        {
+                            var bracket = ScoringService.BracketFor(g);
+                            <span class="@(bracket?.Finished == true ? "ok-text" : "muted")" title="Players knocked out">
+                                @(bracket is null ? "Not drawn" : bracket.Finished ? "Done" : $"{bracket.Placements.Count} / {bracket.Entrants.Count()} out")
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="@(done == activePlayerIds.Count && done > 0 ? "ok-text" : "")">@done / @activePlayerIds.Count</span>
+                        }
                     </td>
                     <td @onclick:stopPropagation>
                         <button class="btn sm @(g.IsActive ? "ok" : "")" @onclick="() => ToggleActiveAsync(g.Id)"
@@ -107,7 +117,7 @@ else
     private async Task LoadAsync()
     {
         await using var db = await DbFactory.CreateDbContextAsync();
-        games = await db.Games.AsNoTracking().Include(g => g.Scores)
+        games = await db.Games.AsNoTracking().Include(g => g.Scores).Include(g => g.BracketResults)
             .OrderBy(g => g.SortOrder).ThenBy(g => g.Title).ToListAsync();
         activePlayerIds = (await db.Players.Where(p => p.IsActive).Select(p => p.Id).ToListAsync()).ToHashSet();
     }
@@ -161,6 +171,11 @@ else
             game = await db.Games.FindAsync(editingId.Value);
             if (game is null)
                 return;
+            if (await TypeChangeProblemAsync(db, game) is { } problem)
+            {
+                await JS.InvokeVoidAsync("alert", problem);
+                return;
+            }
         }
 
         game.Title = title.Trim();
@@ -170,6 +185,18 @@ else
 
         CloseModal();
         await SavedAsync();
+    }
+
+    // Scores and bracket results don't translate into each other, so switching to or from Bracket needs a clean game.
+    private async Task<string?> TypeChangeProblemAsync(AppDbContext db, Game game)
+    {
+        var toBracket = scoringType == ScoringType.Bracket && game.ScoringType != ScoringType.Bracket;
+        var fromBracket = game.ScoringType == ScoringType.Bracket && scoringType != ScoringType.Bracket;
+        if (toBracket && await db.Scores.AnyAsync(s => s.GameId == game.Id))
+            return $"{game.Title} already has scores. Clear them before making it a bracket game.";
+        if (fromBracket && game.BracketSlots is not null)
+            return $"{game.Title} has a bracket. Remove it (on the game's page) before changing the scoring.";
+        return null;
     }
 
     private async Task MoveAsync(int index, int direction)
@@ -199,8 +226,9 @@ else
 
     private async Task DeleteAsync(Game g)
     {
-        var message = g.Scores.Count > 0
-            ? $"Delete {g.Title} and its {g.Scores.Count} score(s)? This can't be undone. (Tip: set it Inactive instead to keep the scores.)"
+        var results = g.Scores.Count + g.BracketResults.Count;
+        var message = results > 0
+            ? $"Delete {g.Title} and its {results} result(s)? This can't be undone. (Tip: set it Inactive instead to keep them.)"
             : $"Delete {g.Title}?";
         if (!await JS.InvokeAsync<bool>("confirm", message))
             return;

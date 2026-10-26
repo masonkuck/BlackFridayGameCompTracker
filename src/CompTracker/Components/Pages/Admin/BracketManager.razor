@@ -1,0 +1,236 @@
+@implements IDisposable
+@inject ScoringService Scoring
+@inject BracketAdmin Brackets
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ChangeNotifier Notifier
+@inject IJSRuntime JS
+
+@* The admin side of a bracket game (shown on its game page): draw it, swap matchups, and pick winners. *@
+
+@if (error is not null)
+{
+    <p class="error">@error</p>
+}
+
+@if (view is null)
+{
+    <p class="muted">Loading…</p>
+}
+else if (view.State is not { } state)
+{
+    <section class="panel bracket-admin">
+        <h2><span><Icon Name="tree-structure" Class="accent" /> No bracket yet</span></h2>
+        <p class="muted">
+            Drawing puts every active player (@activePlayers.Count) into a random double-elimination bracket.
+            You can swap matchups by hand until the first result is in.
+        </p>
+        <button class="btn primary" @onclick="DrawAsync" disabled="@(activePlayers.Count < BracketEngine.MinPlayers)">
+            <Icon Name="shuffle" /> Draw the bracket
+        </button>
+    </section>
+}
+else
+{
+    <div class="bracket-toolbar">
+        <a class="btn" href="brackets/@GameId" target="_blank"><Icon Name="tree-structure" /> Open bracket screen</a>
+        @if (!state.Started)
+        {
+            <button class="btn" @onclick="RedrawAsync"><Icon Name="shuffle" /> Redraw</button>
+        }
+        else
+        {
+            <button class="btn danger" @onclick="ResetAsync"><Icon Name="arrow-counter-clockwise" /> Reset results</button>
+        }
+        <button class="btn danger" @onclick="RemoveAsync">Remove bracket</button>
+    </div>
+
+    @if (!state.Started)
+    {
+        <section class="panel bracket-admin">
+            <h2><span><Icon Name="shuffle" Class="accent" /> Matchups</span></h2>
+            <p class="muted small">
+                Pick a different player in any slot to swap them with whoever is there. Matchups lock once the first result is in.
+            </p>
+            @if (missing.Count > 0)
+            {
+                <p class="warn-text small">
+                    Not in the bracket: @string.Join(", ", missing.Select(p => p.Name)).
+                    @(state.Slots.Contains(0) ? "Put them in a bye slot, or redraw." : "There's no free slot; redraw to make room.")
+                </p>
+            }
+            <div class="seed-grid">
+                @for (var i = 0; i < state.Slots.Count; i += 2)
+                {
+                    var pair = i;
+                    <div class="seed-match">
+                        <span class="muted small">Match @(pair / 2 + 1)</span>
+                        @SlotPicker(state, pair)
+                        <span class="muted small seed-vs">vs</span>
+                        @SlotPicker(state, pair + 1)
+                    </div>
+                }
+            </div>
+        </section>
+    }
+
+    <section class="panel bracket-admin">
+        <h2><span><Icon Name="sword" Class="accent" /> Who won?</span></h2>
+        @if (state.Finished)
+        {
+            <p class="all-done"><Icon Name="crown" Class="gold" /> @view.Name(state.ChampionId!.Value) won the bracket!</p>
+        }
+        else if (!state.Ready.Any())
+        {
+            <p class="muted">Nothing to play right now.</p>
+        }
+        <div class="match-picks">
+            @foreach (var m in state.Ready)
+            {
+                <div class="match-pick">
+                    <span class="muted small">@state.RoundName(m)</span>
+                    <div class="match-pick-buttons">
+                        <button class="btn" @onclick="() => PickAsync(m, m.A.PlayerId)">@view.Name(m.A.PlayerId)</button>
+                        <span class="muted small">vs</span>
+                        <button class="btn" @onclick="() => PickAsync(m, m.B.PlayerId)">@view.Name(m.B.PlayerId)</button>
+                    </div>
+                </div>
+            }
+        </div>
+    </section>
+
+    @if (state.Started)
+    {
+        <section class="panel bracket-admin">
+            <h2><span><Icon Name="check-circle" Class="ok-text" /> Results</span></h2>
+            <p class="muted small">Got one wrong? Click the other player to flip it, or undo it. Later matches that depended on it are cleared.</p>
+            <table class="table results-table">
+                <tbody>
+                    @foreach (var m in state.Matches.Where(m => m.Decided).OrderByDescending(m => m.DecidedAt))
+                    {
+                        <tr>
+                            <td class="muted small nowrap">@state.RoundName(m)</td>
+                            <td>
+                                <span class="result-winner">@view.Name(m.WinnerId!.Value)</span>
+                                <span class="muted small">beat</span>
+                                <button class="btn sm link-btn" title="Make @view.Name(m.LoserId!.Value) the winner" @onclick="() => PickAsync(m, m.LoserId!.Value)">@view.Name(m.LoserId!.Value)</button>
+                            </td>
+                            <td class="actions"><button class="btn sm" @onclick="() => UndoAsync(m)">Undo</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </section>
+    }
+
+    <section class="panel bracket-panel">
+        <BracketTree View="view" />
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public int GameId { get; set; }
+
+    private BracketView? view;
+    private List<Player> activePlayers = [];
+    private List<Player> missing = [];
+    private string? error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+        Notifier.Changed -= OnDataChanged;
+        Notifier.Changed += OnDataChanged;
+    }
+
+    private async Task LoadAsync()
+    {
+        view = await Scoring.GetBracketAsync(GameId);
+        await using var db = await DbFactory.CreateDbContextAsync();
+        activePlayers = await db.Players.AsNoTracking().Where(p => p.IsActive).OrderBy(p => p.Name).ToListAsync();
+        var slotted = view?.State?.Slots.ToHashSet() ?? [];
+        missing = activePlayers.Where(p => !slotted.Contains(p.Id)).ToList();
+    }
+
+    // Other pages (or another admin tab) changed something: show it.
+    private void OnDataChanged() => _ = InvokeAsync(async () =>
+    {
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    private RenderFragment SlotPicker(BracketState state, int index) => __builder =>
+    {
+        var current = state.Slots[index];
+        <select class="input seed-select @(current == 0 ? "bye" : "")" value="@current" @onchange="e => SwapAsync(index, e.Value)">
+            <option value="0">— bye —</option>
+            @foreach (var p in activePlayers)
+            {
+                <option value="@p.Id">@p.Name</option>
+            }
+            @if (current != 0 && activePlayers.All(p => p.Id != current))
+            {
+                <option value="@current">@view!.Name(current) (inactive)</option>
+            }
+        </select>
+    };
+
+    // Putting a player in a slot swaps them with whoever was there, so nobody is ever in the bracket twice.
+    private async Task SwapAsync(int index, object? value)
+    {
+        if (view?.State is not { } state || !int.TryParse(value?.ToString(), out var picked))
+            return;
+        var slots = state.Slots.ToList();
+        var old = slots[index];
+        var from = picked == 0 ? -1 : slots.IndexOf(picked);
+        slots[index] = picked;
+        if (from >= 0 && from != index)
+            slots[from] = old;
+        await RunAsync(() => Brackets.SetSlotsAsync(GameId, slots));
+    }
+
+    private Task DrawAsync() => RunAsync(() => Brackets.DrawAsync(GameId));
+
+    private async Task RedrawAsync()
+    {
+        if (await JS.InvokeAsync<bool>("confirm", "Redraw the bracket with every active player? The current matchups are replaced."))
+            await RunAsync(() => Brackets.DrawAsync(GameId));
+    }
+
+    private async Task ResetAsync()
+    {
+        if (await JS.InvokeAsync<bool>("confirm", "Clear every result in this bracket? The matchups stay."))
+            await RunAsync(async () => { await Brackets.ResetResultsAsync(GameId); return null; });
+    }
+
+    private async Task RemoveAsync()
+    {
+        if (await JS.InvokeAsync<bool>("confirm", "Remove this bracket, including its matchups and results?"))
+            await RunAsync(async () => { await Brackets.RemoveAsync(GameId); return null; });
+    }
+
+    private async Task PickAsync(BracketMatch m, int winnerId)
+    {
+        var lost = await Brackets.ResultsLostIfAsync(GameId, m.Key, winnerId);
+        if (lost > 0 && !await JS.InvokeAsync<bool>("confirm", $"This also clears {lost} later result(s) that depended on it. Continue?"))
+            return;
+        await RunAsync(() => Brackets.SetWinnerAsync(GameId, m.Key, winnerId));
+    }
+
+    private async Task UndoAsync(BracketMatch m)
+    {
+        var lost = await Brackets.ResultsLostIfAsync(GameId, m.Key, null);
+        var message = lost > 0
+            ? $"Undo {view!.Name(m.WinnerId!.Value)}'s win? This also clears {lost} later result(s)."
+            : $"Undo {view!.Name(m.WinnerId!.Value)}'s win?";
+        if (await JS.InvokeAsync<bool>("confirm", message))
+            await RunAsync(() => Brackets.ClearResultAsync(GameId, m.Key));
+    }
+
+    private async Task RunAsync(Func<Task<string?>> action)
+    {
+        error = await action();
+        await LoadAsync();
+    }
+
+    public void Dispose() => Notifier.Changed -= OnDataChanged;
+}

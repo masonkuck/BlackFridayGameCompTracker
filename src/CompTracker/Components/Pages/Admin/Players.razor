@@ -186,6 +186,13 @@ else
             error = $"{p.Name} has scores. Deactivate them instead.";
             return;
         }
+        // Same for a bracket they're drawn into: deleting them would leave a hole in it.
+        var brackets = await db.Games.Where(g => g.BracketSlots != null).Select(g => new { g.Title, g.BracketSlots }).ToListAsync();
+        if (brackets.FirstOrDefault(g => BracketEngine.Parse(g.BracketSlots).Contains(p.Id)) is { } inBracket)
+        {
+            error = $"{p.Name} is in the {inBracket.Title} bracket. Deactivate them instead, or take them out of the bracket first.";
+            return;
+        }
         await db.Players.Where(x => x.Id == p.Id).ExecuteDeleteAsync();
         await SavedAsync();
     }

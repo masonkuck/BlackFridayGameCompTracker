@@ -6,6 +6,7 @@
 @if (current is not null)
 {
     var overall = current.Kind == CelebrationKind.OverallLeader;
+    var bracket = current.ScoringType == ScoringType.Bracket;
     <div class="celebration @(overall ? "overall" : "game")" role="status" aria-live="assertive" @key="showId">
         <div class="confetti" aria-hidden="true">
             @foreach (var piece in pieces)
@@ -16,7 +17,7 @@
         <div class="celebration-card">
             <div class="celebration-eyebrow">
                 <Icon Name="@(overall ? "trophy" : "crown")" Class="gold" />
-                @(overall ? "New tournament leader" : "New leader")
+                @(overall ? "New tournament leader" : bracket ? "Bracket champion" : "New leader")
             </div>
             <div class="celebration-name">@current.PlayerName</div>
             <div class="celebration-detail">
@@ -26,8 +27,15 @@
                 }
                 else
                 {
-                    <text>takes 1st in <strong>@current.GameTitle</strong></text>
-                    <ScoreValue Type="current.ScoringType!.Value" Value="current.Value!.Value" Class="celebration-score" />
+                    @if (bracket)
+                    {
+                        <text>wins the <strong>@current.GameTitle</strong> bracket</text>
+                    }
+                    else
+                    {
+                        <text>takes 1st in <strong>@current.GameTitle</strong></text>
+                        <ScoreValue Type="current.ScoringType!.Value" Value="current.Value!.Value" Class="celebration-score" />
+                    }
                 }
             </div>
             @if (current.Dethroned.Count > 0)

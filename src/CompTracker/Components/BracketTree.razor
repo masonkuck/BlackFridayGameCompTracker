@@ -1,0 +1,76 @@
+@* The bracket drawn as columns of matches: winners bracket, losers bracket, then the grand final.
+   Scrolls sideways inside its own box when it's wider than the screen. *@
+
+@if (View.State is { } state)
+{
+    <div class="bracket-sections">
+        @foreach (var (side, title) in Sections)
+        {
+            var rounds = state.Matches.Where(m => m.Side == side && Visible(m)).GroupBy(m => m.Round).OrderBy(g => g.Key).ToList();
+            if (rounds.Count == 0)
+            {
+                continue;
+            }
+            <section class="bracket-section">
+                <h3 class="bracket-section-title">@title</h3>
+                <div class="bracket-scroll">
+                    <div class="bracket">
+                        @foreach (var round in rounds)
+                        {
+                            <div class="bracket-round">
+                                <div class="bracket-round-name">@state.RoundName(round.First())</div>
+                                <div class="bracket-round-matches">
+                                    @foreach (var m in round)
+                                    {
+                                        <div class="bm @(m.Ready ? "ready" : "") @(m.HasBye ? "has-bye" : "")">
+                                            @SlotView(m, m.A)
+                                            @SlotView(m, m.B)
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </section>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public BracketView View { get; set; } = null!;
+
+    private static readonly (BracketSide, string)[] Sections =
+    [
+        (BracketSide.Winners, "Winners bracket"),
+        (BracketSide.Losers, "Losers bracket"),
+        (BracketSide.Final, "Grand final"),
+    ];
+
+    // First-round byes stay visible so the draw makes sense; later bye matches are just bookkeeping.
+    private static bool Visible(BracketMatch m) =>
+        !(m.A.IsBye && m.B.IsBye) && (!m.HasBye || (m.Side == BracketSide.Winners && m.Round == 1));
+
+    private RenderFragment SlotView(BracketMatch m, Slot slot) => __builder =>
+    {
+        var result = slot.IsPlayer && m.WinnerId is { } w ? (w == slot.PlayerId ? "win" : "lose") : "";
+        <div class="bm-slot @result @(slot.Kind == SlotKind.Player ? "" : "empty")">
+            @if (slot.IsPlayer)
+            {
+                <span class="bm-name">@View.Name(slot.PlayerId)</span>
+                @if (result == "win")
+                {
+                    <Icon Name="check-circle" Class="bm-mark" />
+                }
+            }
+            else if (slot.IsBye)
+            {
+                <span class="bm-name">bye</span>
+            }
+            else
+            {
+                <span class="bm-name">TBD</span>
+            }
+        </div>
+    };
+}

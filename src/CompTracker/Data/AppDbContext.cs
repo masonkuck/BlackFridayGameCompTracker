@@ -9,6 +9,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Game> Games => Set<Game>();
     public DbSet<Score> Scores => Set<Score>();
     public DbSet<PlacePoints> PlacePoints => Set<PlacePoints>();
+    public DbSet<BracketResult> BracketResults => Set<BracketResult>();
 
     public static IEnumerable<PlacePoints> DefaultPlacePoints() =>
         Enumerable.Range(1, 10).Select(place => new PlacePoints { Place = place, Points = 11 - place });
@@ -26,6 +27,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(g => g.Title).HasMaxLength(200);
             e.Property(g => g.Notes).HasMaxLength(2000);
             e.Property(g => g.ScoringType).HasConversion<string>().HasMaxLength(20);
+            e.Property(g => g.BracketSlots).HasMaxLength(4000);
+        });
+
+        modelBuilder.Entity<BracketResult>(e =>
+        {
+            e.Property(r => r.MatchKey).HasMaxLength(20);
+            e.HasIndex(r => new { r.GameId, r.MatchKey }).IsUnique();
+            e.HasOne(r => r.Game).WithMany(g => g.BracketResults).HasForeignKey(r => r.GameId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(r => r.Winner).WithMany().HasForeignKey(r => r.WinnerId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Score>(e =>

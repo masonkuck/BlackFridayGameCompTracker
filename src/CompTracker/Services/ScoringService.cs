@@ -10,6 +10,15 @@ public record LeaderboardRow(int PlayerId, string PlayerName, int Rank, int Tota
 
 public record TodoRow(int PlayerId, string PlayerName, IReadOnlyList<string> RemainingGames);
 
+// A bracket game's live state, with player names for display. State is null until the bracket is set up.
+public record BracketView(Game Game, BracketState? State, IReadOnlyDictionary<int, string> Names, IReadOnlyList<Standing> Standings)
+{
+    public string Name(int playerId) => Names.TryGetValue(playerId, out var n) ? n : "?";
+}
+
+// What a bracket game's dashboard card shows besides the champion. Next is a match that can be played now.
+public record BracketSummary(int Entrants, int StillIn, string? Next);
+
 // Everything is computed on read from the current scores and points table, so edits show up immediately.
 public class ScoringService(IDbContextFactory<AppDbContext> dbFactory)
 {
@@ -18,9 +27,12 @@ public class ScoringService(IDbContextFactory<AppDbContext> dbFactory)
         await using var db = await dbFactory.CreateDbContextAsync();
         var game = await db.Games.AsNoTracking()
             .Include(g => g.Scores.Where(s => s.Player.IsActive)).ThenInclude(s => s.Player)
+            .Include(g => g.BracketResults)
             .FirstOrDefaultAsync(g => g.Id == gameId);
         if (game is null)
             return [];
+        if (game.ScoringType == ScoringType.Bracket)
+            UseBracketPlaces(game, await db.Players.AsNoTracking().Where(p => p.IsActive).ToDictionaryAsync(p => p.Id));
 
         var table = await db.PlacePoints.AsNoTracking().ToListAsync();
         return Rank(game.ScoringType, game.Scores, table);
@@ -46,12 +58,56 @@ public class ScoringService(IDbContextFactory<AppDbContext> dbFactory)
     {
         var (players, games, table) = await LoadAsync();
         var summaries = ReportBuilder.BuildGameSummaries(players, games, table);
+        var names = players.ToDictionary(p => p.Id, p => p.Name);
+        string Name(int id) => names.TryGetValue(id, out var n) ? n : "?";
+        var brackets = games
+            .Where(g => g.ScoringType == ScoringType.Bracket)
+            .Select(g => (g.Id, State: BracketFor(g)))
+            .Where(x => x.State is not null)
+            .ToDictionary(x => x.Id, x => new BracketSummary(
+                x.State!.Entrants.Count(),
+                x.State.Entrants.Count() - x.State.Placements.Count,
+                x.State.Ready.Select(m => $"{Name(m.A.PlayerId)} vs {Name(m.B.PlayerId)}").FirstOrDefault()));
         return new DashboardData(
             BuildLeaderboard(players, games, table),
             BuildTodo(players, games),
             summaries,
             ReportBuilder.BuildRecent(summaries, recentCount),
-            players.Count);
+            players.Count,
+            brackets);
+    }
+
+    public async Task<BracketView?> GetBracketAsync(int gameId)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var game = await db.Games.AsNoTracking().Include(g => g.BracketResults).FirstOrDefaultAsync(g => g.Id == gameId);
+        if (game is null)
+            return null;
+        var names = await db.Players.AsNoTracking().ToDictionaryAsync(p => p.Id, p => p.Name);
+        return new BracketView(game, BracketFor(game), names, await GetGameStandingsAsync(gameId));
+    }
+
+    // The bracket worked out from a game's seeding and stored winners; null if it hasn't been set up.
+    public static BracketState? BracketFor(Game game)
+    {
+        var slots = BracketEngine.Parse(game.BracketSlots);
+        if (BracketEngine.Validate(slots) is not null)
+            return null;
+        var results = game.BracketResults.ToDictionary(r => r.MatchKey, r => new BracketResultInput(r.WinnerId, r.DecidedAt));
+        return BracketEngine.Build(slots, results);
+    }
+
+    // Stands in finishing places (1 = champion) for a bracket game's scores, so ranking, the leaderboard,
+    // the ticker and the reports treat it like any other game. Players still in the bracket have no "score" yet.
+    private static void UseBracketPlaces(Game game, IReadOnlyDictionary<int, Player> players)
+    {
+        var state = BracketFor(game);
+        game.Scores = state is null
+            ? []
+            : state.Placements
+                .Where(p => players.ContainsKey(p.PlayerId))
+                .Select(p => new Score { GameId = game.Id, PlayerId = p.PlayerId, Player = players[p.PlayerId], Value = p.Place, UpdatedAt = p.DecidedAt })
+                .ToList();
     }
 
     public async Task<GameBoard?> GetGameBoardAsync(int gameId)
@@ -88,8 +144,12 @@ public class ScoringService(IDbContextFactory<AppDbContext> dbFactory)
         var players = await db.Players.AsNoTracking().Where(p => p.IsActive).ToListAsync();
         var games = await db.Games.AsNoTracking().Where(g => g.IsActive)
             .Include(g => g.Scores).ThenInclude(s => s.Player)
+            .Include(g => g.BracketResults)
             .OrderBy(g => g.SortOrder).ThenBy(g => g.Title)
             .ToListAsync();
+        var byId = players.ToDictionary(p => p.Id);
+        foreach (var game in games.Where(g => g.ScoringType == ScoringType.Bracket))
+            UseBracketPlaces(game, byId);
         var table = await db.PlacePoints.AsNoTracking().ToListAsync();
         return (players, games, table);
     }
@@ -103,8 +163,15 @@ public class ScoringService(IDbContextFactory<AppDbContext> dbFactory)
     }
 
     // Standard competition ranking: tied values share a place and the next place is skipped (1, 2, 2, 4).
+    // Bracket "scores" already are places (and players still in the bracket have none), so they're used as-is.
     public static List<Standing> Rank(ScoringType type, IEnumerable<Score> scores, IReadOnlyCollection<PlacePoints> table)
     {
+        if (type == ScoringType.Bracket)
+            return scores
+                .OrderBy(s => s.Value).ThenBy(s => s.Player.Name)
+                .Select(s => new Standing(s.PlayerId, s.Player.Name, s.Value, (int)s.Value, PointsForPlace((int)s.Value, table), s.UpdatedAt))
+                .ToList();
+
         var ordered = type.LowerIsBetter()
             ? scores.OrderBy(s => s.Value).ThenBy(s => s.Player.Name).ToList()
             : scores.OrderByDescending(s => s.Value).ThenBy(s => s.Player.Name).ToList();
@@ -154,6 +221,10 @@ public class ScoringService(IDbContextFactory<AppDbContext> dbFactory)
             .Select(p => new TodoRow(
                 p.Id,
                 p.Name,
-                games.Where(g => g.Scores.All(s => s.PlayerId != p.Id)).Select(g => g.Title).ToList()))
+                games.Where(g => g.Scores.All(s => s.PlayerId != p.Id) && InGame(g, p.Id)).Select(g => g.Title).ToList()))
             .ToList();
+
+    // Everyone plays every scored game; a bracket game is only on the list of players who are in its bracket.
+    private static bool InGame(Game game, int playerId) =>
+        game.ScoringType != ScoringType.Bracket || BracketEngine.Parse(game.BracketSlots).Contains(playerId);
 }

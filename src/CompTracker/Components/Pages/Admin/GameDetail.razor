@@ -26,77 +26,84 @@ else if (game is not null)
     {
         <p class="muted">@game.Notes</p>
     }
-    <p class="muted small">
-        @if (game.ScoringType == ScoringType.TimeLowest)
-        {
-            <text>
-                Fill in minutes, seconds and milliseconds. Typing <code>:</code> or <code>.</code> jumps to the next box,
-                and you can paste a whole time like <code>4:32.150</code>. Use <strong>+ hr</strong> for runs over an hour.
-            </text>
-        }
-        else
-        {
-            <text>Enter the raw score. Commas are fine.</text>
-        }
-        Press Enter to save.
-    </p>
-
-    @if (rows.Count == 0)
+    @if (game.ScoringType == ScoringType.Bracket)
     {
-        <p class="muted">No active players yet. <a href="admin/players">Add players</a>.</p>
+        <BracketManager GameId="Id" />
     }
     else
     {
-        <table class="table scores">
-            <thead>
-                <tr><th>Place</th><th>Player</th><th>@(game.ScoringType == ScoringType.TimeLowest ? "Time" : "Score")</th><th>Points</th><th class="actions"></th></tr>
-            </thead>
-            <tbody>
-                @foreach (var row in rows)
-                {
-                    <tr class="@(row.Standing is null ? "unplayed" : "")">
-                        <td class="place @PlaceClass(row.Standing?.Place)">
-                            @(row.Standing is null ? "—" : ScoreFormat.Ordinal(row.Standing.Place))
-                        </td>
-                        <td class="strong">@row.PlayerName</td>
-                        <td>
-                            <span class="score-entry">
-                                <Icon Name="@ScoreValue.IconName(game.ScoringType)" Class="score-icon" />
-                                @if (IsTime)
+        <p class="muted small">
+            @if (game.ScoringType == ScoringType.TimeLowest)
+            {
+                <text>
+                    Fill in minutes, seconds and milliseconds. Typing <code>:</code> or <code>.</code> jumps to the next box,
+                    and you can paste a whole time like <code>4:32.150</code>. Use <strong>+ hr</strong> for runs over an hour.
+                </text>
+            }
+            else
+            {
+                <text>Enter the raw score. Commas are fine.</text>
+            }
+            Press Enter to save.
+        </p>
+
+        @if (rows.Count == 0)
+        {
+            <p class="muted">No active players yet. <a href="admin/players">Add players</a>.</p>
+        }
+        else
+        {
+            <table class="table scores">
+                <thead>
+                    <tr><th>Place</th><th>Player</th><th>@(game.ScoringType == ScoringType.TimeLowest ? "Time" : "Score")</th><th>Points</th><th class="actions"></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in rows)
+                    {
+                        <tr class="@(row.Standing is null ? "unplayed" : "")">
+                            <td class="place @PlaceClass(row.Standing?.Place)">
+                                @(row.Standing is null ? "—" : ScoreFormat.Ordinal(row.Standing.Place))
+                            </td>
+                            <td class="strong">@row.PlayerName</td>
+                            <td>
+                                <span class="score-entry">
+                                    <Icon Name="@ScoreValue.IconName(game.ScoringType)" Class="score-icon" />
+                                    @if (IsTime)
+                                    {
+                                        <TimeInput Parts="row.Time" Invalid="@(row.Error is not null)"
+                                                   OnChange="() => row.Error = null" OnEnter="() => SaveIfDirtyAsync(row)" />
+                                    }
+                                    else
+                                    {
+                                        <input class="input score-input @(row.Error is null ? "" : "invalid")"
+                                               placeholder="@ScoreFormat.Placeholder(game.ScoringType)"
+                                               @bind="row.Draft" @bind:event="oninput" @bind:after="() => row.Error = null"
+                                               @onkeydown="e => OnKeyDown(e, row)" />
+                                    }
+                                </span>
+                                @if (row.Error is not null)
                                 {
-                                    <TimeInput Parts="row.Time" Invalid="@(row.Error is not null)"
-                                               OnChange="() => row.Error = null" OnEnter="() => SaveIfDirtyAsync(row)" />
+                                    <div class="error small">@row.Error</div>
                                 }
-                                else
+                                else if (IsTime && IsDirty(row) && Current(row) is { Length: > 0 } preview)
                                 {
-                                    <input class="input score-input @(row.Error is null ? "" : "invalid")"
-                                           placeholder="@ScoreFormat.Placeholder(game.ScoringType)"
-                                           @bind="row.Draft" @bind:event="oninput" @bind:after="() => row.Error = null"
-                                           @onkeydown="e => OnKeyDown(e, row)" />
+                                    <div class="muted small">= <span class="score-value"><Icon Name="@ScoreValue.IconName(game.ScoringType)" Class="score-icon" />@preview</span></div>
                                 }
-                            </span>
-                            @if (row.Error is not null)
-                            {
-                                <div class="error small">@row.Error</div>
-                            }
-                            else if (IsTime && IsDirty(row) && Current(row) is { Length: > 0 } preview)
-                            {
-                                <div class="muted small">= <span class="score-value"><Icon Name="@ScoreValue.IconName(game.ScoringType)" Class="score-icon" />@preview</span></div>
-                            }
-                            else if (row.Standing is null)
-                            {
-                                <div class="muted small">Not played</div>
-                            }
-                        </td>
-                        <td class="points">@(row.Standing?.Points.ToString() ?? "")</td>
-                        <td class="actions">
-                            <button class="btn sm primary" @onclick="() => SaveAsync(row)" disabled="@(!IsDirty(row))">Save</button>
-                            <button class="btn sm danger" @onclick="() => ClearAsync(row)" disabled="@(row.Standing is null)">Clear</button>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+                                else if (row.Standing is null)
+                                {
+                                    <div class="muted small">Not played</div>
+                                }
+                            </td>
+                            <td class="points">@(row.Standing?.Points.ToString() ?? "")</td>
+                            <td class="actions">
+                                <button class="btn sm primary" @onclick="() => SaveAsync(row)" disabled="@(!IsDirty(row))">Save</button>
+                                <button class="btn sm danger" @onclick="() => ClearAsync(row)" disabled="@(row.Standing is null)">Clear</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
     }
 }
 

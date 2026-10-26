@@ -18,6 +18,7 @@
     --speedrun: #38bdf8;
     --high: #34d399;
     --low: #f472b6;
+    --bracket: #fb923c;
     --radius: 10px;
 }
 
@@ -263,6 +264,7 @@ textarea.input { resize: vertical; }
 .badge.TimeLowest { color: var(--speedrun); }
 .badge.ScoreHighest { color: var(--high); }
 .badge.ScoreLowest { color: var(--low); }
+.badge.Bracket { color: var(--bracket); }
 .badge.inactive-badge { color: var(--muted); }
 
 /* ---------- Backups ---------- */
@@ -675,3 +677,60 @@ html[data-sound=blocked] .sound-toggle { color: var(--gold); border-color: var(-
     .sheet:last-of-type { break-after: auto; }
     .sheet-table tr, .bar-row, .tile { break-inside: avoid; }
 }
+
+/* ---------- Brackets ---------- */
+.warn-text { color: var(--gold); }
+.bracket-sections { display: flex; flex-direction: column; gap: 1.5rem; }
+.bracket-section-title { margin: 0 0 .5rem; font-size: 1rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+/* Wide brackets scroll sideways inside their box, never the whole page. */
+.bracket-scroll { overflow-x: auto; padding-bottom: .5rem; }
+.bracket { display: flex; gap: 1.25rem; min-width: min-content; }
+.bracket-round { display: flex; flex-direction: column; width: 11.5rem; flex-shrink: 0; }
+.bracket-round-name { color: var(--muted); font-size: .8rem; margin-bottom: .5rem; white-space: nowrap; }
+/* Spread each round's matches over the column so later rounds sit between the matches that feed them. */
+.bracket-round-matches { display: flex; flex-direction: column; justify-content: space-around; gap: .75rem; flex: 1; }
+.bm { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.bm.ready { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.bm.has-bye { opacity: .55; }
+.bm-slot { display: flex; align-items: center; gap: .4rem; padding: .35rem .6rem; min-height: 2rem; }
+.bm-slot + .bm-slot { border-top: 1px solid var(--border); }
+.bm-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bm-slot.empty { color: var(--muted); font-style: italic; }
+.bm-slot.win { color: var(--text); background: rgba(52, 211, 153, .1); }
+.bm-slot.lose { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(138, 145, 168, .6); }
+.bm-mark { margin-left: auto; color: var(--ok); }
+@media (max-width: 640px) {
+    .bracket { gap: .75rem; }
+    .bracket-round { width: 9.5rem; }
+    .bracket-panel { padding: 1rem .75rem; }
+}
+
+.bracket-board .bracket-panel { margin: 1rem 0 1.5rem; }
+.champion-banner {
+    display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+    margin: 1rem 0; padding: 1rem 1.25rem;
+    font-size: clamp(1.2rem, 2.5vw, 1.8rem);
+    background: linear-gradient(90deg, rgba(251, 191, 36, .16), transparent);
+    border: 1px solid rgba(251, 191, 36, .45); border-radius: 14px;
+}
+.champion-name { color: var(--gold); }
+.up-next { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; margin: 1rem 0; }
+.up-next-label { color: var(--accent-hover); display: inline-flex; align-items: center; gap: .35rem; margin-right: .25rem; }
+.chip.up-next-match { background: var(--surface-2); color: var(--text); border: 1px solid var(--accent); }
+.bracket-places .finished { margin: 0 0 1rem; }
+
+/* Admin */
+.bracket-admin { margin-bottom: 1.25rem; }
+.bracket-toolbar { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1.25rem; }
+.seed-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: .75rem; }
+.seed-match { display: flex; flex-direction: column; gap: .35rem; padding: .75rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; }
+.seed-vs { text-align: center; }
+.seed-select.bye { color: var(--muted); font-style: italic; }
+.match-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: .75rem; }
+.match-pick { display: flex; flex-direction: column; gap: .4rem; padding: .75rem; background: var(--surface-2); border: 1px solid var(--accent); border-radius: 10px; }
+.match-pick-buttons { display: flex; align-items: center; gap: .5rem; }
+.match-pick-buttons .btn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.match-pick-buttons .btn:hover { background: var(--ok); border-color: var(--ok); color: #06281c; }
+.result-winner { color: var(--ok); }
+.btn.link-btn { background: transparent; border-color: transparent; color: var(--muted); padding-inline: .25rem; }
+.btn.link-btn:hover { color: var(--text); border-color: var(--border); }
