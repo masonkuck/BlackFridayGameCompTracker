@@ -73,6 +73,33 @@ public sealed class BracketAdminTests : IDisposable
         Assert.DoesNotContain("Smash", todo.Single(t => t.PlayerName == "Dan").RemainingGames);
     }
 
+    private async Task<List<string>> HaveAMatchAsync() =>
+        (await scoring.GetTodoAsync()).Where(t => t.RemainingGames.Contains("Smash")).Select(t => t.PlayerName).ToList();
+
+    [Fact]
+    public async Task TodoOnlyListsPlayersWhoCanPlayAMatchNow()
+    {
+        // Drawn but not locked in: nobody can play yet.
+        Assert.Null(await admin.SetSlotsAsync(gameId, [1, 4, 2, 3]));
+        Assert.Empty(await HaveAMatchAsync());
+
+        Assert.Null(await admin.SetLockedAsync(gameId, true));
+        Assert.Equal(["Ann", "Bob", "Cat", "Dan"], await HaveAMatchAsync());
+
+        // Ann beats Dan: Ann waits for the Bob/Cat winner, Dan waits for its loser.
+        await admin.SetWinnerAsync(gameId, "W1-1", 1);
+        Assert.Equal(["Bob", "Cat"], await HaveAMatchAsync());
+
+        // Bob beats Cat: Ann v Bob (winners final) and Dan v Cat (losers) are both on.
+        await admin.SetWinnerAsync(gameId, "W1-2", 2);
+        Assert.Equal(["Ann", "Bob", "Cat", "Dan"], await HaveAMatchAsync());
+
+        // Ann wins the winners final and waits for the losers side; Dan is out.
+        await admin.SetWinnerAsync(gameId, "W2-1", 1);
+        await admin.SetWinnerAsync(gameId, "L1-1", 3);
+        Assert.Equal(["Bob", "Cat"], await HaveAMatchAsync());
+    }
+
     [Fact]
     public async Task ChangingAWinner_ClearsResultsThatDependedOnIt()
     {

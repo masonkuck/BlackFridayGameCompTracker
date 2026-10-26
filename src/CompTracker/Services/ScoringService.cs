@@ -216,16 +216,27 @@ public class ScoringService(IDbContextFactory<AppDbContext> dbFactory)
         return result;
     }
 
-    public static List<TodoRow> BuildTodo(IReadOnlyCollection<Player> players, IReadOnlyCollection<Game> games) =>
-        players
+    public static List<TodoRow> BuildTodo(IReadOnlyCollection<Player> players, IReadOnlyCollection<Game> games)
+    {
+        var playingNow = games
+            .Where(g => g.ScoringType == ScoringType.Bracket)
+            .ToDictionary(g => g.Id, PlayersWithAMatchNow);
+        return players
             .OrderBy(p => p.Name)
             .Select(p => new TodoRow(
                 p.Id,
                 p.Name,
-                games.Where(g => g.Scores.All(s => s.PlayerId != p.Id) && InGame(g, p.Id)).Select(g => g.Title).ToList()))
+                games.Where(g => playingNow.TryGetValue(g.Id, out var ready) ? ready.Contains(p.Id) : g.Scores.All(s => s.PlayerId != p.Id))
+                    .Select(g => g.Title).ToList()))
             .ToList();
+    }
 
-    // Everyone plays every scored game; a bracket game is only on the list of players who are in its bracket.
-    private static bool InGame(Game game, int playerId) =>
-        game.ScoringType != ScoringType.Bracket || BracketEngine.Parse(game.BracketSlots).Contains(playerId);
+    // Everyone plays every scored game until they post a score. A bracket game is only on someone's list while
+    // they have a match they can play right now: not while they wait for an opponent, or once they're out.
+    private static HashSet<int> PlayersWithAMatchNow(Game game)
+    {
+        if (!game.BracketLocked || BracketFor(game) is not { } state)
+            return [];
+        return state.Ready.SelectMany(m => new[] { m.A.PlayerId, m.B.PlayerId }).ToHashSet();
+    }
 }
