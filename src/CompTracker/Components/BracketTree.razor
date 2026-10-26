@@ -1,56 +1,47 @@
-@* The bracket drawn as columns of matches: winners bracket, losers bracket, then the grand final.
-   Scrolls sideways inside its own box when it's wider than the screen.
+@* The bracket drawn as one grid of round columns: the winners bracket on top, ending in the grand final, and the
+   losers bracket underneath, whose winner gets an arrow back up into the grand final. Scrolls sideways inside its
+   own box when it's wider than the screen.
    Admin modes: Arrange lets first-round players be dragged (or tapped, on touch screens) onto another slot to swap;
    Play lets a player in a match be clicked to make them the winner, and decided matches be undone. *@
 
 @if (View.State is { } state)
 {
-    <div class="bracket-sections @(Mode == BracketTreeMode.View ? "" : "bracket-" + Mode.ToString().ToLowerInvariant())">
-        @foreach (var (side, title) in Sections)
-        {
-            var rounds = state.Matches.Where(m => m.Side == side && Visible(m)).GroupBy(m => m.Round).OrderBy(g => g.Key).ToList();
-            if (rounds.Count == 0)
+    var winners = Columns(state, BracketSide.Winners);
+    var losers = Columns(state, BracketSide.Losers);
+    var finals = Columns(state, BracketSide.Final);
+    // The grand final sits past the end of whichever bracket is longer, so the losers final can point up into it.
+    var finalCol = Math.Max(winners.Count, losers.Count) + 1;
+    var columns = finalCol + finals.Count - 1;
+    <div class="bracket-scroll @(Mode == BracketTreeMode.View ? "" : "bracket-" + Mode.ToString().ToLowerInvariant())">
+        <div class="bracket-grid" style="grid-template-columns: repeat(@columns, var(--round-w))">
+            <h3 class="bracket-section-title" style="grid-row: 1; grid-column: 1 / -1">Winners bracket</h3>
+            @for (var c = 0; c < winners.Count; c++)
             {
-                continue;
+                @RoundColumn(state, winners[c], 2, c + 1, "")
             }
-            <section class="bracket-section">
-                <h3 class="bracket-section-title">@title</h3>
-                <div class="bracket-scroll">
-                    <div class="bracket">
-                        @foreach (var round in rounds)
-                        {
-                            <div class="bracket-round">
-                                <div class="bracket-round-name">@state.RoundName(round.First())</div>
-                                <div class="bracket-round-matches">
-                                    @foreach (var m in round)
-                                    {
-                                        var arranging = Mode == BracketTreeMode.Arrange && m.Side == BracketSide.Winners && m.Round == 1;
-                                        <div class="bm @(m.Ready && Mode != BracketTreeMode.Arrange ? "ready" : "") @(m.HasBye ? "has-bye" : "")">
-                                            @if (arranging)
-                                            {
-                                                @ArrangeSlot(m.Index * 2, m.A)
-                                                @ArrangeSlot(m.Index * 2 + 1, m.B)
-                                            }
-                                            else
-                                            {
-                                                @SlotView(m, m.A)
-                                                @SlotView(m, m.B)
-                                            }
-                                            @if (Mode == BracketTreeMode.Play && m.Decided && !m.HasBye)
-                                            {
-                                                <button type="button" class="bm-undo" title="Undo this result" @onclick="() => OnUndo.InvokeAsync(m)">
-                                                    <Icon Name="arrow-counter-clockwise" />
-                                                </button>
-                                            }
-                                        </div>
-                                    }
-                                </div>
-                            </div>
-                        }
-                    </div>
-                </div>
-            </section>
-        }
+            @for (var c = winners.Count + 1; c < finalCol; c++)
+            {
+                @Connector(2, c, "line")
+            }
+            @for (var f = 0; f < finals.Count; f++)
+            {
+                @RoundColumn(state, finals[f], 2, finalCol + f, "final-round")
+            }
+
+            @if (losers.Count > 0)
+            {
+                <h3 class="bracket-section-title losers-title" style="grid-row: 3; grid-column: 1 / -1">Losers bracket</h3>
+                @for (var c = 0; c < losers.Count; c++)
+                {
+                    @RoundColumn(state, losers[c], 4, c + 1, "")
+                }
+                @for (var c = losers.Count + 1; c < finalCol; c++)
+                {
+                    @Connector(4, c, "line")
+                }
+                @Connector(4, finalCol, "elbow")
+            }
+        </div>
     </div>
 }
 
@@ -69,12 +60,60 @@
     private int? dragFrom;
     private int? dragOver;
 
-    private static readonly (BracketSide, string)[] Sections =
-    [
-        (BracketSide.Winners, "Winners bracket"),
-        (BracketSide.Losers, "Losers bracket"),
-        (BracketSide.Final, "Grand final"),
-    ];
+    private List<IGrouping<int, BracketMatch>> Columns(BracketState state, BracketSide side) =>
+        state.Matches.Where(m => m.Side == side && Visible(m)).GroupBy(m => m.Round).OrderBy(g => g.Key).ToList();
+
+    private RenderFragment RoundColumn(BracketState state, IGrouping<int, BracketMatch> round, int row, int col, string extra) => __builder =>
+    {
+        <div class="bracket-round @extra" style="grid-row: @row; grid-column: @col">
+            <div class="bracket-round-name">@state.RoundName(round.First())</div>
+            <div class="bracket-round-matches">
+                @foreach (var m in round)
+                {
+                    @MatchView(m)
+                }
+            </div>
+        </div>
+    };
+
+    // Empty columns between a bracket's last round and the grand final: a line across, or (losers) the arrow up.
+    private RenderFragment Connector(int row, int col, string kind) => __builder =>
+    {
+        <div class="bracket-round bracket-connector @kind" style="grid-row: @row; grid-column: @col" aria-hidden="true">
+            <div class="bracket-round-name">&nbsp;</div>
+            <div class="bracket-round-matches">
+                <span class="connector-line"></span>
+                @if (kind == "elbow")
+                {
+                    <Icon Name="caret-up" Class="connector-arrow" />
+                    <span class="connector-label">to the grand final</span>
+                }
+            </div>
+        </div>
+    };
+
+    private RenderFragment MatchView(BracketMatch m) => __builder =>
+    {
+        var arranging = Mode == BracketTreeMode.Arrange && m.Side == BracketSide.Winners && m.Round == 1;
+        <div class="bm @(m.Ready && Mode != BracketTreeMode.Arrange ? "ready" : "") @(m.HasBye ? "has-bye" : "")">
+            @if (arranging)
+            {
+                @ArrangeSlot(m.Index * 2, m.A)
+                @ArrangeSlot(m.Index * 2 + 1, m.B)
+            }
+            else
+            {
+                @SlotView(m, m.A)
+                @SlotView(m, m.B)
+            }
+            @if (Mode == BracketTreeMode.Play && m.Decided && !m.HasBye)
+            {
+                <button type="button" class="bm-undo" title="Undo this result" @onclick="() => OnUndo.InvokeAsync(m)">
+                    <Icon Name="arrow-counter-clockwise" />
+                </button>
+            }
+        </div>
+    };
 
     protected override void OnParametersSet()
     {

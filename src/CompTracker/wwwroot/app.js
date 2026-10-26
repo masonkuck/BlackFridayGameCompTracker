@@ -215,3 +215,20 @@ document.addEventListener('dragstart', e => {
         e.dataTransfer.effectAllowed = 'move';
     }
 });
+
+// Bracket: stretch the losers bracket's arrow up to the bottom of the grand final match above it.
+// The distance depends on how tall the bracket is, so it's measured whenever the page changes.
+(() => {
+    const fit = () => document.querySelectorAll('.bracket-grid').forEach(grid => {
+        const final = grid.querySelector('.final-round .bm');
+        const elbow = grid.querySelector('.elbow .bracket-round-matches');
+        if (!final || !elbow) return;
+        const top = Math.round(final.getBoundingClientRect().bottom + 8 - elbow.getBoundingClientRect().top);
+        if (elbow.style.getPropertyValue('--elbow-top') !== `${top}px`) {
+            elbow.style.setProperty('--elbow-top', `${top}px`);
+        }
+    });
+    new MutationObserver(fit).observe(document.documentElement, { childList: true, subtree: true });
+    addEventListener('resize', fit);
+    addEventListener('load', fit);
+})();

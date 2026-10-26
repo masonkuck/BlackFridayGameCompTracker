@@ -680,12 +680,31 @@ html[data-sound=blocked] .sound-toggle { color: var(--gold); border-color: var(-
 
 /* ---------- Brackets ---------- */
 .warn-text { color: var(--gold); }
-.bracket-sections { display: flex; flex-direction: column; gap: 1.5rem; }
-.bracket-section-title { margin: 0 0 .5rem; font-size: 1rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+/* One grid for the whole bracket: winners row (ending in the grand final) over the losers row. */
+.bracket-grid { --round-w: 11.5rem; --col-gap: 1.25rem; display: grid; column-gap: var(--col-gap); row-gap: .5rem; min-width: min-content; }
+.bracket-section-title { margin: 0; font-size: 1rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.bracket-section-title.losers-title { margin-top: 1.25rem; }
 /* Wide brackets scroll sideways inside their box, never the whole page. */
-.bracket-scroll { overflow-x: auto; padding-bottom: .5rem; }
-.bracket { display: flex; gap: 1.25rem; min-width: min-content; }
-.bracket-round { display: flex; flex-direction: column; width: 11.5rem; flex-shrink: 0; }
+.bracket-scroll { overflow-x: auto; padding: .7rem .7rem .5rem 0; }
+.bracket-round { display: flex; flex-direction: column; min-width: 0; }
+.final-round .bracket-round-name { color: var(--gold); }
+.final-round .bm { border-color: rgba(251, 191, 36, .45); }
+
+/* Connectors through empty columns: a line from a bracket's last round across to the grand final.
+   The losers bracket's ends in an elbow that turns up toward the grand final above it. */
+.bracket-connector .bracket-round-matches { position: relative; }
+.connector-line { position: absolute; top: 50%; left: calc(-1 * var(--col-gap)); right: calc(-1 * var(--col-gap)); border-top: 2px solid var(--border); }
+/* --elbow-top is set by app.js so the arrow ends right under the grand final match. */
+.elbow .connector-line {
+    right: 50%; top: var(--elbow-top, -3.5rem); bottom: 50%;
+    border-top: none; border-bottom: 2px solid var(--accent); border-right: 2px solid var(--accent);
+    border-bottom-right-radius: 10px;
+}
+.connector-arrow { position: absolute; left: 50%; top: calc(var(--elbow-top, -3.5rem) - .45rem); transform: translateX(calc(-50% + 1px)); color: var(--accent); font-size: 1.1rem; }
+.connector-label {
+    position: absolute; left: calc(50% + .6rem); top: calc(var(--elbow-top, -3.5rem) / 2);
+    color: var(--accent-hover); font-size: .75rem; white-space: nowrap;
+}
 .bracket-round-name { color: var(--muted); font-size: .8rem; margin-bottom: .5rem; white-space: nowrap; }
 /* Spread each round's matches over the column so later rounds sit between the matches that feed them. */
 .bracket-round-matches { display: flex; flex-direction: column; justify-content: space-around; gap: .75rem; flex: 1; }
@@ -700,8 +719,7 @@ html[data-sound=blocked] .sound-toggle { color: var(--gold); border-color: var(-
 .bm-slot.lose { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(138, 145, 168, .6); }
 .bm-mark { margin-left: auto; color: var(--ok); }
 @media (max-width: 640px) {
-    .bracket { gap: .75rem; }
-    .bracket-round { width: 9.5rem; }
+    .bracket-grid { --round-w: 9.5rem; --col-gap: .75rem; }
     .bracket-panel { padding: 1rem .75rem; }
 }
 
