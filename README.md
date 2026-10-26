@@ -49,8 +49,8 @@ Anyone with the link can view the dashboard. Admin pages are protected only by t
 | `/brackets/{id}` | Live bracket for a bracket game: winners and losers brackets, grand final, up-next matches and places. Bracket games' dashboard cards open this instead. |
 | `/stats` | Printable results: a final-standings cover page plus one report sheet per player. "Print everything" prints one page each. No PIN needed. |
 | `/stats/{playerId}` | One player's printable report: final place, points by game chart, game-by-game results. A highlights section (best finish, closest call, rival, points gaps) is built but hidden; set `ShowHighlights` in `Components/Reports/PlayerReportCard.razor` to bring it back. |
-| `/admin/games` | Add, edit, reorder and deactivate games, and set each game's scoring type. Click a game to enter scores. |
-| `/admin/games/{id}` | Enter or overwrite each player's score or time for that game. For a bracket game: draw the bracket, swap matchups, and pick match winners. |
+| `/admin/games` | Add, edit, reorder and deactivate games, set each game's scoring type, and mark games just for fun. Click a game to enter scores. |
+| `/admin/games/{id}` | Enter or overwrite each player's score or time for that game. For a bracket game: draw it, drag players to rearrange matchups, lock it in, and pick winners right on the bracket. |
 | `/admin/players` | Add, rename and deactivate players. |
 | `/admin/points` | Global points per place (default 10, 9, â€¦ 1). |
 
@@ -62,18 +62,22 @@ Anyone with the link can view the dashboard. Admin pages are protected only by t
 - Points come from the points table. Places past the end of the list get the last value, with a minimum of 1.
 - The leaderboard sums points over active games. A tie on points is broken by the number of 1st places.
 - Inactive players and games are hidden from standings, the leaderboard and the todo list, but their scores are kept.
+- A game marked **Just for fun** (checkbox in the add/edit game window) is tracked like any other game (standings, brackets, todo list, ticker) but is worth no points: it's left out of leaderboard totals, games played and the printable stats.
 
 ## Bracket games
 
 Pick **Bracket (double elimination)** as a game's scoring type for a head-to-head game. On the game's admin page:
 
-1. **Draw the bracket.** Every active player goes into a random bracket. Byes fill it out to 4, 8, 16… and go to the top seeds.
-2. **Swap matchups (optional).** Pick a different player in any slot to swap them with whoever's there. Matchups lock once the first result is in; **Reset results** unlocks them, and **Redraw** reshuffles.
-3. **Pick winners.** Each match that's ready to play has a button for each player. Losers drop to the losers bracket; a second loss knocks a player out. The grand final is winners-bracket champion vs losers-bracket champion, with a reset match if the losers-bracket champion wins the first one.
+1. **Draw the bracket.** Every active player goes into a random bracket. Byes fill it out to 4, 8, 16â€¦ and go to the top seeds.
+2. **Rearrange (optional).** Drag a player onto another first-round slot to swap them (or tap one, then the other, on a phone). **Redraw** reshuffles everyone.
+3. **Lock it in.** Once the matchups look right, **Lock in bracket**. Until the first result, **Unlock matchups** lets you go back and rearrange.
+4. **Pick winners.** Click the player who won a highlighted match and confirm. Losers drop to the losers bracket; a second loss knocks a player out. The losers-bracket champion has an arrow up into the grand final against the winners-bracket champion, with a reset match if the losers-bracket champion wins the first one.
 
-To fix a mistake, click the other player in **Results** to flip it, or **Undo** it. Any later match that depended on it is cleared, and the app asks first.
+To fix a mistake, click the loser of a match to flip it, or use the undo button on it. Any later match that depended on it is cleared, and the app warns you first. **Reset results** clears every result but keeps the matchups.
 
-A bracket counts toward the leaderboard like any other game: places come from how far you got (champion 1st, grand-final loser 2nd, then by which losers round you went out in; players who go out in the same round tie, e.g. 5th–6th become 5th & 5th), and then the normal points table applies. A place is final as soon as someone is knocked out. Crowning the champion gets its own "Bracket champion" celebration.
+A bracket game only shows on a player's todo list while they have a match they can play right now, not while they're waiting for an opponent or once they're out.
+
+A bracket counts toward the leaderboard like any other game: places come from how far you got (champion 1st, grand-final loser 2nd, then by which losers round you went out in; players who go out in the same round tie, e.g. 5thâ€“6th become 5th & 5th), and then the normal points table applies. A place is final as soon as someone is knocked out. Crowning the champion gets its own "Bracket champion" celebration.
 
 Switching a game to or from Bracket is blocked while it has scores or a bracket, since one can't be turned into the other.
 
