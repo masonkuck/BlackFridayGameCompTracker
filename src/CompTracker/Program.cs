@@ -1,6 +1,7 @@
 using CompTracker.Components;
 using CompTracker.Data;
 using CompTracker.Services;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -33,6 +34,13 @@ using (var db = app.Services.GetRequiredService<IDbContextFactory<AppDbContext>>
 {
     db.Database.Migrate();
 }
+
+// A dev tunnel forwards requests as localhost; take the public host from its X-Forwarded-* headers so the page
+// (and its QR code) knows the real address. Only trusted from loopback, where the tunnel client runs.
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedHost | ForwardedHeaders.XForwardedProto,
+});
 
 if (!app.Environment.IsDevelopment())
 {

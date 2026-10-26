@@ -38,14 +38,21 @@ exit /b 1
 rem ---- 2. Firewall rule so phones can connect ----
 :firewall
 netsh advfirewall firewall show rule name=CompTracker >nul 2>nul
-if not errorlevel 1 goto :run
+if not errorlevel 1 goto :tunnel
 echo.
 echo Phones on your Wi-Fi can't reach this PC until Windows Firewall allows port %PORT%.
 choice /c YN /m "Add the firewall rule now (asks for admin)"
-if errorlevel 2 goto :run
+if errorlevel 2 goto :tunnel
 powershell -NoProfile -Command "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-Command','New-NetFirewallRule -DisplayName CompTracker -Direction Inbound -Protocol TCP -LocalPort %PORT% -Action Allow'"
 
-rem ---- 3. Run ----
+rem ---- 3. Optional online link (dev tunnel) so people off your Wi-Fi can follow along ----
+:tunnel
+echo.
+choice /c YN /m "Also share it online with a dev tunnel link"
+if errorlevel 2 goto :run
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\tunnel.ps1 -Port %PORT%
+
+rem ---- 4. Run ----
 :run
 echo.
 echo Starting... the first start takes a minute while it builds.

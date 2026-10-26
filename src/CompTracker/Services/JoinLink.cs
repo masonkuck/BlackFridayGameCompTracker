@@ -26,6 +26,21 @@ public class JoinLink(IConfiguration config, IServer server)
         }
     }
 
+    // The address of the page being viewed, so a dev tunnel or other public link shares itself. Falls back to the
+    // LAN address when the page is open on localhost, since a phone can't reach that.
+    public string? UrlFor(string pageBaseUri)
+    {
+        if (config["JoinUrl"] is { Length: > 0 } configured)
+            return configured;
+        if (Uri.TryCreate(pageBaseUri, UriKind.Absolute, out var page) && !IsLocal(page.Host))
+            return page.GetLeftPart(UriPartial.Authority) + "/";
+        return Url;
+    }
+
+    private static bool IsLocal(string host) =>
+        host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+        || (IPAddress.TryParse(host.Trim('[', ']'), out var ip) && IPAddress.IsLoopback(ip));
+
     // Black on white with a quiet zone: inverted (light on dark) codes don't scan on every phone.
     public string QrSvg(string url) => svgCache.GetOrAdd(url, u =>
     {

@@ -6,7 +6,8 @@ A local Blazor Server app for running the Black Friday gaming tournament. It tra
 
 **Easiest (Windows):** double-click `Start.bat`. Before it starts the app, it:
 - installs the .NET 10 SDK if it's missing, through winget or Microsoft's install script;
-- offers to add the firewall rule so phones can connect.
+- offers to add the firewall rule so phones can connect;
+- offers to share the app online through a [dev tunnel](https://aka.ms/devtunnels/docs), so people off your Wi-Fi can follow along (see below).
 
 SQLite needs no install; it's built into the app.
 
@@ -18,7 +19,7 @@ dotnet run --project src/CompTracker
 
 Change `"AdminPin"` and `"EventName"` in `src/CompTracker/appsettings.json` before your own event.
 
-The app listens on `http://0.0.0.0:5080`. Open `http://localhost:5080` on this PC or `http://<this-pc-ip>:5080` from other devices. Use `ipconfig` to find the IPv4 address, or just scan the QR code in the dashboard's corner. That card's X hides it, and the QR button in the header brings it back. The address is detected automatically; if it picks the wrong network adapter, set `"JoinUrl": "http://192.168.1.18:5080/"` in `appsettings.json`.
+The app listens on `http://0.0.0.0:5080`. Open `http://localhost:5080` on this PC or `http://<this-pc-ip>:5080` from other devices. Use `ipconfig` to find the IPv4 address, or just scan the QR code in the dashboard's corner. That card's X hides it, and the QR button in the header brings it back. The QR code shares whatever address the dashboard is open on, so through a dev tunnel it shows the tunnel link; on `localhost` it shows the PC's network address instead. That address is detected automatically; if it picks the wrong network adapter, set `"JoinUrl": "http://192.168.1.18:5080/"` in `appsettings.json`.
 
 The SQLite database (`src/CompTracker/comptracker.db`) is created and migrated automatically on first start. Backups are automatic (see below). To start fresh, stop the app and delete it.
 
@@ -27,6 +28,17 @@ The SQLite database (`src/CompTracker/comptracker.db`) is created and migrated a
 ```powershell
 New-NetFirewallRule -DisplayName "CompTracker" -Direction Inbound -Protocol TCP -LocalPort 5080 -Action Allow
 ```
+
+### Share it online (dev tunnel)
+
+Answer **Y** to the online-link question in `Start.bat` (or run `tools\tunnel.ps1` on its own). The first time, it:
+- installs the dev tunnels CLI;
+- has you sign in with a Microsoft or GitHub account;
+- creates a tunnel labelled `comptracker` that allows anonymous visitors.
+
+After that it reuses the same tunnel, so **the link stays the same**. Each start pushes its 30-day expiry back. The tunnel runs in its own minimized window; close that window to take the link offline.
+
+Anyone with the link can view the dashboard. Admin pages are protected only by the PIN, so change it before sharing widely. Visitors see a one-time Microsoft warning page and click Continue.
 
 ## Pages
 
@@ -95,6 +107,7 @@ Both are bundled with the app (no internet needed at the party):
 ## Development
 
 ```powershell
+dotnet watch --project src/CompTracker                  # run with hot reload (Ctrl+R in its window forces a restart)
 dotnet test                                             # unit tests
 dotnet tool restore                                     # restores dotnet-ef (local tool)
 dotnet ef migrations add <Name> --project src/CompTracker --output-dir Data/Migrations

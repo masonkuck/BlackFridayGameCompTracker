@@ -6,6 +6,7 @@
 @inject AdminSession AdminSession
 @inject IJSRuntime JS
 @inject JoinLink Join
+@inject NavigationManager Nav
 
 <PageTitle>Leaderboard · @EventName</PageTitle>
 
@@ -224,7 +225,7 @@
     {
         // Leaving admin for the dashboard ends the admin session; the PIN is needed again.
         AdminSession.Lock();
-        joinUrl = Join.Url;
+        joinUrl = Join.UrlFor(Nav.BaseUri);
         await LoadAsync();
         Notifier.Changed += OnDataChanged;
         Notifier.ScorePosted += OnScorePosted;
