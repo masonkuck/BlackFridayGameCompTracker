@@ -103,7 +103,7 @@
         board = await Scoring.GetGameBoardAsync(Id);
         loaded = true;
         // Bracket games have their own screen.
-        if (board?.Summary.ScoringType == ScoringType.Bracket)
+        if (board?.Summary.ScoringType.IsBracket() == true)
             Nav.NavigateTo($"brackets/{Id}", replace: true);
     }
 

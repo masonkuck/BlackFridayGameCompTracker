@@ -24,7 +24,7 @@
     {
         <div class="board-title">
             <h1>@view.Game.Title</h1>
-            <span class="badge Bracket">@ScoringType.Bracket.Label()</span>
+            <span class="badge @view.Game.ScoringType">@view.Game.ScoringType.Label()</span>
             @if (view.Game.ForFun)
             {
                 <span class="badge fun" title="Tracked, but doesn't count toward the leaderboard"><Icon Name="confetti" /> For fun</span>

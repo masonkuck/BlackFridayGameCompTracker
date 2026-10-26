@@ -30,7 +30,7 @@ else if (game is not null)
     {
         <p class="muted">@game.Notes</p>
     }
-    @if (game.ScoringType == ScoringType.Bracket)
+    @if (game.ScoringType.IsBracket())
     {
         <BracketManager GameId="Id" />
     }

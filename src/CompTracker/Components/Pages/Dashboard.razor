@@ -73,7 +73,7 @@
                         @foreach (var g in games)
                         {
                             var leaders = g.Standings.Where(s => s.Place == 1).ToList();
-                            var isBracket = g.ScoringType == ScoringType.Bracket;
+                            var isBracket = g.ScoringType.IsBracket();
                             var bracket = isBracket ? brackets.GetValueOrDefault(g.GameId) : null;
                             var total = bracket?.Entrants ?? playerCount;
                             var pct = total == 0 ? 0 : g.Standings.Count * 100 / total;
@@ -196,7 +196,7 @@
                         {
                             <span class="ticker-item">
                                 <strong>@r.Standing.PlayerName</strong>
-                                @if (r.Game.ScoringType == ScoringType.Bracket)
+                                @if (r.Game.ScoringType.IsBracket())
                                 {
                                     <span class="muted">@(r.Standing.Place == 1 ? "won the" : "finished")</span>
                                     @if (r.Standing.Place != 1)

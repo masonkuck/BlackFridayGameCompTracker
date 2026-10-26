@@ -9,16 +9,16 @@ public class BracketEngineTests
 
     // Plays the bracket to the end, picking each ready match's winner with the given rule.
     private static (BracketState State, Dictionary<string, BracketResultInput> Results) PlayOut(
-        List<int> slots, Func<BracketMatch, int> pickWinner)
+        List<int> slots, Func<BracketMatch, int> pickWinner, bool single = false)
     {
         var results = new Dictionary<string, BracketResultInput>();
-        var state = BracketEngine.Build(slots, results);
+        var state = BracketEngine.Build(slots, results, single);
         for (var guard = 0; !state.Finished; guard++)
         {
             Assert.True(guard < 200, "bracket never finished");
             var match = Assert.Single(state.Ready.Take(1));
             results[match.Key] = new BracketResultInput(pickWinner(match), T0.AddMinutes(guard));
-            state = BracketEngine.Build(slots, results);
+            state = BracketEngine.Build(slots, results, single);
         }
         return (state, results);
     }
@@ -197,6 +197,65 @@ public class BracketEngineTests
         Assert.Equal(["Losers round 1", "Losers round 2", "Losers final"], played);
         Assert.Equal("Winners semifinal", state.RoundName(state.Matches.First(m => m.Key == "W2-1")));
         Assert.Equal("Grand final", state.RoundName(state.Matches.First(m => m.Key == "GF1")));
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(5)]
+    [InlineData(8)]
+    [InlineData(11)]
+    [InlineData(17)]
+    public void Single_PlaysOut_EveryoneButTheChampionLosesOnce(int n)
+    {
+        var (state, _) = PlayOut(BracketEngine.Seed(Players(n)), m => Math.Max(m.A.PlayerId, m.B.PlayerId), single: true);
+
+        Assert.True(state.SingleElimination);
+        Assert.All(state.Matches, m => Assert.Equal(BracketSide.Winners, m.Side));
+        Assert.Equal(n - 1, state.Matches.Count(m => !m.HasBye));
+        var losses = state.Matches.Where(m => !m.HasBye).Select(m => m.LoserId!.Value).ToList();
+        Assert.Equal(losses.Distinct().Count(), losses.Count);
+        Assert.DoesNotContain(state.ChampionId!.Value, losses);
+        Assert.Equal(Players(n), state.Placements.Select(p => p.PlayerId).Order());
+        Assert.Equal(1, state.Placements.Count(p => p.Place == 1));
+        Assert.Equal(1, state.Placements.Count(p => p.Place == 2));
+    }
+
+    [Theory]
+    [InlineData(8, new[] { 1, 2, 3, 3, 5, 5, 5, 5 })]
+    [InlineData(5, new[] { 1, 2, 3, 3, 5 })]
+    [InlineData(2, new[] { 1, 2 })]
+    public void Single_PlacesShareTheRoundTheyLostIn(int n, int[] places)
+    {
+        var (state, _) = PlayOut(BracketEngine.Seed(Players(n)), m => Math.Min(m.A.PlayerId, m.B.PlayerId), single: true);
+
+        Assert.Equal(places, state.Placements.Select(p => p.Place));
+        Assert.Equal(1, state.ChampionId);
+    }
+
+    [Theory]
+    [InlineData(2, new[] { "Final" })]
+    [InlineData(4, new[] { "Semifinal", "Final" })]
+    [InlineData(8, new[] { "Quarterfinal", "Semifinal", "Final" })]
+    [InlineData(16, new[] { "Round 1", "Quarterfinal", "Semifinal", "Final" })]
+    public void Single_RoundNames(int n, string[] names)
+    {
+        var state = BracketEngine.Build(BracketEngine.Seed(Players(n)), new Dictionary<string, BracketResultInput>(), singleElimination: true);
+
+        Assert.Equal(names, state.Matches.GroupBy(m => m.Round).Select(g => state.RoundName(g.First())));
+    }
+
+    [Fact]
+    public void Single_UsesTheSameMatchKeysAsTheWinnersBracket()
+    {
+        var slots = BracketEngine.Seed(Players(4));
+        var results = new Dictionary<string, BracketResultInput> { ["W1-1"] = new(1, T0), ["W1-2"] = new(2, T0) };
+
+        var state = BracketEngine.Build(slots, results, singleElimination: true);
+
+        var final = Assert.Single(state.Ready);
+        Assert.Equal(("W2-1", 1, 2), (final.Key, final.A.PlayerId, final.B.PlayerId));
+        Assert.Equal([(3, 3), (4, 3)], state.Placements.Select(p => (p.PlayerId, p.Place)).Order());
     }
 
     [Fact]

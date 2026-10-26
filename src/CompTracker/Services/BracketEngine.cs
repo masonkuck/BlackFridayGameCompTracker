@@ -35,7 +35,8 @@ public record BracketState(
     IReadOnlyList<BracketMatch> Matches,
     IReadOnlyList<BracketPlacement> Placements,
     int? ChampionId,
-    IReadOnlySet<string> UsedResults)
+    IReadOnlySet<string> UsedResults,
+    bool SingleElimination = false)
 {
     public IEnumerable<int> Entrants => Slots.Where(id => id != 0);
     public IEnumerable<BracketMatch> Ready => Matches.Where(m => m.Ready);
@@ -48,6 +49,13 @@ public record BracketState(
 
     public string RoundName(BracketMatch m) => m.Side switch
     {
+        BracketSide.Winners when SingleElimination => (WinnersRounds - m.Round) switch
+        {
+            0 => "Final",
+            1 => "Semifinal",
+            2 => "Quarterfinal",
+            _ => $"Round {m.Round}",
+        },
         BracketSide.Final => m.Round == 1 ? "Grand final" : "Grand final reset",
         BracketSide.Winners when m.Round == WinnersRounds => "Winners final",
         BracketSide.Winners when m.Round == WinnersRounds - 1 && m.Round > 1 => "Winners semifinal",
@@ -61,7 +69,7 @@ public record BracketState(
         Matches.Where(m => m.Side == BracketSide.Losers && m.Round <= round && !m.HasBye).Select(m => m.Round).Distinct().Count();
 }
 
-// Double elimination. The seeding is a list of 2^k slots (player id, or 0 for a bye) where slots 2i and 2i+1
+// Double elimination (or single elimination, which is just the winners bracket). The seeding is a list of 2^k slots (player id, or 0 for a bye) where slots 2i and 2i+1
 // meet in the first round. Everything else (who plays whom, who is out, final places) is worked out from the
 // seeding plus the stored winners, so a result can be changed or undone and the rest of the bracket follows.
 //
@@ -128,7 +136,7 @@ public static class BracketEngine
         return null;
     }
 
-    public static BracketState Build(IReadOnlyList<int> slots, IReadOnlyDictionary<string, BracketResultInput> results)
+    public static BracketState Build(IReadOnlyList<int> slots, IReadOnlyDictionary<string, BracketResultInput> results, bool singleElimination = false)
     {
         var size = slots.Count;
         var builder = new Builder(results);
@@ -147,6 +155,13 @@ public static class BracketEngine
             for (var i = 0; i < prev.Count / 2; i++)
                 round.Add(builder.Play($"W{r}-{i + 1}", BracketSide.Winners, r, i, builder.Winner(prev[2 * i]), builder.Winner(prev[2 * i + 1])));
             winners.Add(round);
+        }
+
+        if (singleElimination)
+        {
+            var winner = builder.Winner(winners[^1][0]);
+            return new BracketState(size, slots.ToList(), winners.SelectMany(r => r).ToList(), SinglePlaces(winners, winner),
+                winner.IsPlayer ? winner.PlayerId : null, builder.Used, SingleElimination: true);
         }
 
         // Losers bracket (none for a two-player bracket: the first loser goes straight to the grand final).
@@ -245,6 +260,31 @@ public static class BracketEngine
             placements.Add(new BracketPlacement(champion.PlayerId, 1, deciding.DecidedAt ?? DateTime.MinValue));
         }
 
+        return placements.OrderBy(p => p.Place).ToList();
+    }
+
+    // Single elimination: one loss and you're out, so you finish by the round you lost in. Everyone out in the
+    // same round shares a place (3rd-4th become 3rd & 3rd, 5th-8th become 5th...). Byes don't count as losses.
+    private static List<BracketPlacement> SinglePlaces(List<List<BracketMatch>> winners, Slot champion)
+    {
+        var placements = new List<BracketPlacement>();
+        var better = 1; // the champion
+        for (var r = winners.Count - 1; r >= 0; r--)
+        {
+            var place = better + 1;
+            foreach (var m in winners[r].Where(m => !m.HasBye))
+            {
+                better++;
+                if (m.LoserId is { } loser)
+                    placements.Add(new BracketPlacement(loser, place, m.DecidedAt!.Value));
+            }
+        }
+
+        if (champion.IsPlayer)
+        {
+            var final = winners[^1][0];
+            placements.Add(new BracketPlacement(champion.PlayerId, 1, final.DecidedAt ?? DateTime.MinValue));
+        }
         return placements.OrderBy(p => p.Place).ToList();
     }
 

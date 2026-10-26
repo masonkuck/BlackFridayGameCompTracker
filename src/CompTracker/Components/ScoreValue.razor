@@ -11,7 +11,7 @@
     public static string IconName(ScoringType type) => type switch
     {
         ScoringType.TimeLowest => "clock",
-        ScoringType.Bracket => "tree-structure",
+        ScoringType.Bracket or ScoringType.BracketSingle => "tree-structure",
         _ => "star",
     };
 }

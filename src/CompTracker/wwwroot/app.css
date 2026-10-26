@@ -267,7 +267,7 @@ textarea.input { resize: vertical; }
 .badge.TimeLowest { color: var(--speedrun); }
 .badge.ScoreHighest { color: var(--high); }
 .badge.ScoreLowest { color: var(--low); }
-.badge.Bracket { color: var(--bracket); }
+.badge.Bracket, .badge.BracketSingle { color: var(--bracket); }
 .badge.inactive-badge { color: var(--muted); }
 .badge.fun { color: var(--accent); }
 .badge .icon { vertical-align: -.1em; }

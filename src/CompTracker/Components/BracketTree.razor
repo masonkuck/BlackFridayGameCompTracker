@@ -1,6 +1,6 @@
 @* The bracket drawn as one grid of round columns: the winners bracket on top, ending in the grand final, and the
    losers bracket underneath, whose winner gets an arrow back up into the grand final. Scrolls sideways inside its
-   own box when it's wider than the screen.
+   own box when it's wider than the screen. Single elimination is just the one bracket, ending in the final.
    Admin modes: Arrange lets first-round players be dragged (or tapped, on touch screens) onto another slot to swap;
    Play lets a player in a match be clicked to make them the winner, and decided matches be undone. *@
 
@@ -14,10 +14,13 @@
     var columns = finalCol + finals.Count - 1;
     <div class="bracket-scroll @(Mode == BracketTreeMode.View ? "" : "bracket-" + Mode.ToString().ToLowerInvariant())">
         <div class="bracket-grid" style="grid-template-columns: repeat(@columns, var(--round-w))">
-            <h3 class="bracket-section-title" style="grid-row: 1; grid-column: 1 / -1">Winners bracket</h3>
+            @if (!state.SingleElimination)
+            {
+                <h3 class="bracket-section-title" style="grid-row: 1; grid-column: 1 / -1">Winners bracket</h3>
+            }
             @for (var c = 0; c < winners.Count; c++)
             {
-                @RoundColumn(state, winners[c], 2, c + 1, "")
+                @RoundColumn(state, winners[c], 2, c + 1, state.SingleElimination && c == winners.Count - 1 ? "final-round" : "")
             }
             @for (var c = winners.Count + 1; c < finalCol; c++)
             {

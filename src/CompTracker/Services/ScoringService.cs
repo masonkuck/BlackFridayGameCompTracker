@@ -31,7 +31,7 @@ public class ScoringService(IDbContextFactory<AppDbContext> dbFactory)
             .FirstOrDefaultAsync(g => g.Id == gameId);
         if (game is null)
             return [];
-        if (game.ScoringType == ScoringType.Bracket)
+        if (game.ScoringType.IsBracket())
             UseBracketPlaces(game, await db.Players.AsNoTracking().Where(p => p.IsActive).ToDictionaryAsync(p => p.Id));
 
         var table = await db.PlacePoints.AsNoTracking().ToListAsync();
@@ -61,7 +61,7 @@ public class ScoringService(IDbContextFactory<AppDbContext> dbFactory)
         var names = players.ToDictionary(p => p.Id, p => p.Name);
         string Name(int id) => names.TryGetValue(id, out var n) ? n : "?";
         var brackets = games
-            .Where(g => g.ScoringType == ScoringType.Bracket)
+            .Where(g => g.ScoringType.IsBracket())
             .Select(g => (g.Id, State: BracketFor(g)))
             .Where(x => x.State is not null)
             .ToDictionary(x => x.Id, x => new BracketSummary(
@@ -95,7 +95,7 @@ public class ScoringService(IDbContextFactory<AppDbContext> dbFactory)
         if (BracketEngine.Validate(slots) is not null)
             return null;
         var results = game.BracketResults.ToDictionary(r => r.MatchKey, r => new BracketResultInput(r.WinnerId, r.DecidedAt));
-        return BracketEngine.Build(slots, results);
+        return BracketEngine.Build(slots, results, game.ScoringType == ScoringType.BracketSingle);
     }
 
     // Stands in finishing places (1 = champion) for a bracket game's scores, so ranking, the leaderboard,
@@ -149,7 +149,7 @@ public class ScoringService(IDbContextFactory<AppDbContext> dbFactory)
             .OrderBy(g => g.SortOrder).ThenBy(g => g.Title)
             .ToListAsync();
         var byId = players.ToDictionary(p => p.Id);
-        foreach (var game in games.Where(g => g.ScoringType == ScoringType.Bracket))
+        foreach (var game in games.Where(g => g.ScoringType.IsBracket()))
             UseBracketPlaces(game, byId);
         var table = await db.PlacePoints.AsNoTracking().ToListAsync();
         return (players, games, table);
@@ -170,7 +170,7 @@ public class ScoringService(IDbContextFactory<AppDbContext> dbFactory)
     {
         int Points(int place) => forFun ? 0 : PointsForPlace(place, table);
 
-        if (type == ScoringType.Bracket)
+        if (type.IsBracket())
             return scores
                 .OrderBy(s => s.Value).ThenBy(s => s.Player.Name)
                 .Select(s => new Standing(s.PlayerId, s.Player.Name, s.Value, (int)s.Value, Points((int)s.Value), s.UpdatedAt))
@@ -224,7 +224,7 @@ public class ScoringService(IDbContextFactory<AppDbContext> dbFactory)
     public static List<TodoRow> BuildTodo(IReadOnlyCollection<Player> players, IReadOnlyCollection<Game> games)
     {
         var playingNow = games
-            .Where(g => g.ScoringType == ScoringType.Bracket)
+            .Where(g => g.ScoringType.IsBracket())
             .ToDictionary(g => g.Id, PlayersWithAMatchNow);
         return players
             .OrderBy(p => p.Name)

@@ -103,7 +103,7 @@ public static class ReportBuilder
 
         // Compare gaps relative to the score size so a 0.5s gap in a 1-minute run beats 50 points in a 100k-point game.
         var closest = played
-            .Where(r => r.Ahead is not null && r.Game.ScoringType != ScoringType.Bracket)
+            .Where(r => r.Ahead is not null && !r.Game.ScoringType.IsBracket())
             .Select(r => new ClosestCall(r, Math.Abs(r.Standing!.Value - r.Ahead!.Value)))
             .MinBy(c => c.Gap / Math.Max(Math.Abs(c.Result.Ahead!.Value), 1m));
 

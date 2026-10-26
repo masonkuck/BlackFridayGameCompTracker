@@ -6,7 +6,7 @@
 @if (current is not null)
 {
     var overall = current.Kind == CelebrationKind.OverallLeader;
-    var bracket = current.ScoringType == ScoringType.Bracket;
+    var bracket = current.ScoringType?.IsBracket() == true;
     <div class="celebration @(overall ? "overall" : "game")" role="status" aria-live="assertive" @key="showId">
         <div class="confetti" aria-hidden="true">
             @foreach (var piece in pieces)

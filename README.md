@@ -66,7 +66,7 @@ Anyone with the link can view the dashboard. Admin pages are protected only by t
 
 ## Bracket games
 
-Pick **Bracket (double elimination)** as a game's scoring type for a head-to-head game. On the game's admin page:
+Pick **Bracket (double elimination)** or **Bracket (single elimination)** as a game's scoring type for a head-to-head game. On the game's admin page:
 
 1. **Draw the bracket.** Every active player goes into a random bracket. Byes fill it out to 4, 8, 16… and go to the top seeds.
 2. **Rearrange (optional).** Drag a player onto another first-round slot to swap them (or tap one, then the other, on a phone). **Redraw** reshuffles everyone.
@@ -80,6 +80,8 @@ A bracket game only shows on a player's todo list while they have a match they c
 A bracket counts toward the leaderboard like any other game: places come from how far you got (champion 1st, grand-final loser 2nd, then by which losers round you went out in; players who go out in the same round tie, e.g. 5th–6th become 5th & 5th), and then the normal points table applies. A place is final as soon as someone is knocked out. Crowning the champion gets its own "Bracket champion" celebration.
 
 Switching a game to or from Bracket is blocked while it has scores or a bracket, since one can't be turned into the other.
+
+**Single elimination** works the same way, minus the losers bracket: one loss and you're out. The rounds are named Final, Semifinal, Quarterfinal (Round 1, 2… before that), and everyone knocked out in the same round shares a place (both semifinal losers are 3rd, the quarterfinal losers 5th). You can switch a game between single and double elimination while it has no results; the drawn matchups are kept.
 
 ## Sounds & celebrations
 

@@ -18,7 +18,7 @@ public static class ScoreFormat
     public static string Format(ScoringType type, decimal value) => type switch
     {
         ScoringType.TimeLowest => FormatTime(value),
-        ScoringType.Bracket => Ordinal((int)value),   // a bracket "score" is the finishing place
+        ScoringType.Bracket or ScoringType.BracketSingle => Ordinal((int)value),   // a bracket "score" is the finishing place
         _ => FormatNumber(value),
     };
 

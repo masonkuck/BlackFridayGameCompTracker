@@ -83,7 +83,7 @@ public class BracketAdmin(IDbContextFactory<AppDbContext> dbFactory, ScoringServ
         var results = Inputs(game.BracketResults);
         var others = results.Keys.Where(k => k != matchKey).ToList();
         Apply(results, matchKey, winnerId, DateTime.UtcNow);
-        var used = BracketEngine.Build(BracketEngine.Parse(game.BracketSlots), results).UsedResults;
+        var used = BracketEngine.Build(BracketEngine.Parse(game.BracketSlots), results, Single(game)).UsedResults;
         return others.Count(k => !used.Contains(k));
     }
 
@@ -107,7 +107,7 @@ public class BracketAdmin(IDbContextFactory<AppDbContext> dbFactory, ScoringServ
 
         if (winnerId is { } id)
         {
-            var match = BracketEngine.Build(slots, Inputs(game.BracketResults)).Matches.FirstOrDefault(m => m.Key == matchKey);
+            var match = BracketEngine.Build(slots, Inputs(game.BracketResults), Single(game)).Matches.FirstOrDefault(m => m.Key == matchKey);
             if (match is null || !match.A.IsPlayer || !match.B.IsPlayer)
                 return "That match isn't ready to be played yet.";
             if (id != match.A.PlayerId && id != match.B.PlayerId)
@@ -132,7 +132,7 @@ public class BracketAdmin(IDbContextFactory<AppDbContext> dbFactory, ScoringServ
         var remaining = game.BracketResults.Where(r => r.MatchKey != matchKey).ToList();
         var inputs = Inputs(remaining);
         Apply(inputs, matchKey, winnerId, DateTime.UtcNow);
-        var used = BracketEngine.Build(slots, inputs).UsedResults;
+        var used = BracketEngine.Build(slots, inputs, Single(game)).UsedResults;
         db.BracketResults.RemoveRange(remaining.Where(r => !used.Contains(r.MatchKey)));
 
         await db.SaveChangesAsync();
@@ -141,6 +141,8 @@ public class BracketAdmin(IDbContextFactory<AppDbContext> dbFactory, ScoringServ
         notifier.Notify(new ScorePosted(gameId, Celebrations.Detect(before, after, game.Title, game.ScoringType, game.IsActive)));
         return null;
     }
+
+    private static bool Single(Game game) => game.ScoringType == ScoringType.BracketSingle;
 
     private static Dictionary<string, BracketResultInput> Inputs(IEnumerable<BracketResult> results) =>
         results.ToDictionary(r => r.MatchKey, r => new BracketResultInput(r.WinnerId, r.DecidedAt));

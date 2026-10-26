@@ -41,7 +41,7 @@ public static class Celebrations
             var was = GameLeaders(before);
             var now = GameLeaders(after);
             // A bracket has no leader until its champion is crowned, and that's the moment worth celebrating.
-            var crowned = type == ScoringType.Bracket && was.Count == 0 && now.Count == 1 ? now[0].PlayerId : (int?)null;
+            var crowned = type.IsBracket() && was.Count == 0 && now.Count == 1 ? now[0].PlayerId : (int?)null;
             if ((crowned ?? NewSoleLeader(Ids(was), Ids(now))) is { } id)
             {
                 var leader = now.Single(s => s.PlayerId == id);

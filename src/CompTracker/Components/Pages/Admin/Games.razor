@@ -88,7 +88,7 @@ else
                         }
                     </td>
                     <td class="nowrap">
-                        @if (g.ScoringType == ScoringType.Bracket)
+                        @if (g.ScoringType.IsBracket())
                         {
                             var bracket = ScoringService.BracketFor(g);
                             <span class="@(bracket?.Finished == true ? "ok-text" : "muted")" title="Players knocked out">
@@ -204,15 +204,19 @@ else
         await SavedAsync();
     }
 
-    // Scores and bracket results don't translate into each other, so switching to or from Bracket needs a clean game.
+    // Scores and bracket results don't translate into each other, so switching to or from a bracket needs a clean game.
+    // Switching between single and double elimination keeps the drawn matchups, but not any results.
     private async Task<string?> TypeChangeProblemAsync(AppDbContext db, Game game)
     {
-        var toBracket = scoringType == ScoringType.Bracket && game.ScoringType != ScoringType.Bracket;
-        var fromBracket = game.ScoringType == ScoringType.Bracket && scoringType != ScoringType.Bracket;
+        var toBracket = scoringType.IsBracket() && !game.ScoringType.IsBracket();
+        var fromBracket = game.ScoringType.IsBracket() && !scoringType.IsBracket();
+        var otherBracket = game.ScoringType.IsBracket() && scoringType.IsBracket() && scoringType != game.ScoringType;
         if (toBracket && await db.Scores.AnyAsync(s => s.GameId == game.Id))
             return $"{game.Title} already has scores. Clear them before making it a bracket game.";
         if (fromBracket && game.BracketSlots is not null)
             return $"{game.Title} has a bracket. Remove it (on the game's page) before changing the scoring.";
+        if (otherBracket && await db.BracketResults.AnyAsync(r => r.GameId == game.Id))
+            return $"{game.Title} already has bracket results. Reset them (on the game's page) before switching between single and double elimination.";
         return null;
     }
 

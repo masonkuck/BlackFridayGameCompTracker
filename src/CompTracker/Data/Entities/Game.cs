@@ -6,6 +6,7 @@ public enum ScoringType
     ScoreHighest,
     ScoreLowest,
     Bracket,      // double elimination; places come from the bracket, stored as the place number (1 = champion)
+    BracketSingle, // single elimination, otherwise the same as Bracket
 }
 
 public static class ScoringTypeExtensions
@@ -16,6 +17,7 @@ public static class ScoringTypeExtensions
         ScoringType.ScoreHighest => "High score (highest wins)",
         ScoringType.ScoreLowest => "Low score (lowest wins)",
         ScoringType.Bracket => "Bracket (double elimination)",
+        ScoringType.BracketSingle => "Bracket (single elimination)",
         _ => type.ToString(),
     };
 
@@ -24,11 +26,15 @@ public static class ScoringTypeExtensions
         ScoringType.TimeLowest => "Speedrun",
         ScoringType.ScoreHighest => "High score",
         ScoringType.ScoreLowest => "Low score",
-        ScoringType.Bracket => "Bracket",
+        ScoringType.Bracket => "Double elim",
+        ScoringType.BracketSingle => "Single elim",
         _ => type.ToString(),
     };
 
     public static bool LowerIsBetter(this ScoringType type) => type != ScoringType.ScoreHighest;
+
+    // Head-to-head games played as a bracket (either kind) rather than by posting scores.
+    public static bool IsBracket(this ScoringType type) => type is ScoringType.Bracket or ScoringType.BracketSingle;
 }
 
 public class Game
