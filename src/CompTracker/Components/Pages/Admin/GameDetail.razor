@@ -88,7 +88,7 @@ else if (game is not null)
                                 <div class="muted small">Not played</div>
                             }
                         </td>
-                        <td>@(row.Standing?.Points.ToString() ?? "")</td>
+                        <td class="points">@(row.Standing?.Points.ToString() ?? "")</td>
                         <td class="actions">
                             <button class="btn sm primary" @onclick="() => SaveAsync(row)" disabled="@(!IsDirty(row))">Save</button>
                             <button class="btn sm danger" @onclick="() => ClearAsync(row)" disabled="@(row.Standing is null)">Clear</button>

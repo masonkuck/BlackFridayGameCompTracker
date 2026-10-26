@@ -64,6 +64,7 @@ code { background: var(--surface-2); padding: 0 .3em; border-radius: 4px; }
 
 .muted { color: var(--muted); }
 .small { font-size: .85rem; }
+.nowrap { white-space: nowrap; }
 .strong { font-weight: 600; }
 .error { color: var(--danger); }
 .ok-text { color: var(--ok); }
@@ -227,11 +228,33 @@ textarea.input { resize: vertical; }
 
 @media (max-width: 640px) {
     .table { display: block; overflow-x: auto; }
+    .table th, .table td { padding: .5rem .5rem; }
+    /* Reordering is a big-screen job; on a phone the arrows just squeeze the columns. */
+    .table .order { display: none; }
+
+    /* Score entry: one card per player (place, name, points / the input / the buttons) instead of a wide table. */
+    .table.scores { overflow: visible; }
+    .table.scores thead { display: none; }
+    .table.scores tbody { display: block; }
+    .table.scores tr {
+        display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+        column-gap: .75rem; row-gap: .4rem; align-items: center;
+        padding: .7rem .75rem; border-bottom: 1px solid var(--border);
+    }
+    .table.scores tr:last-child { border-bottom: none; }
+    .table.scores td { display: block; padding: 0; border: none; }
+    .table.scores td.place { width: auto; grid-row: 1; grid-column: 1; }
+    .table.scores td.strong { grid-row: 1; grid-column: 2; }
+    .table.scores td.points { grid-row: 1; grid-column: 3; color: var(--muted); }
+    .table.scores td.points:not(:empty)::after { content: " pts"; }
+    .table.scores td:nth-child(3) { grid-row: 2; grid-column: 1 / -1; }
+    .table.scores td.actions { grid-row: 3; grid-column: 1 / -1; text-align: left; }
 }
 
 /* ---------- Badges ---------- */
 .badge {
     display: inline-block;
+    white-space: nowrap;
     padding: .1rem .55rem;
     border-radius: 999px;
     font-size: .8rem;
@@ -255,7 +278,7 @@ textarea.input { resize: vertical; }
 
 /* ---------- Dashboard ---------- */
 .dashboard { min-height: 100vh; padding: 1.5rem 16px; max-width: 1600px; margin: 0 auto; }
-.dash-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
+.dash-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
 .dash-header h1 {
     font-size: clamp(1.5rem, 3.5vw, 2.8rem);
     margin: 0;
@@ -310,7 +333,12 @@ html[data-qr=hidden] .qr-toggle { display: grid; }
     display: inline-flex; align-items: center;
 }
 .sound-toggle:hover { color: var(--text); border-color: var(--accent); }
-.sound-toggle > span { display: none; align-items: center; gap: .4rem; }
+.sound-toggle > span { display: none; align-items: center; gap: .4rem; white-space: nowrap; }
+/* Phones: icon only; the colour still shows on / off / needs a tap. */
+@media (max-width: 640px) {
+    .sound-label { display: none; }
+    .sound-toggle { padding: .45rem; font-size: 1.1rem; }
+}
 html:not([data-sound]) .sound-off,
 html[data-sound=off] .sound-off,
 html[data-sound=on] .sound-on,

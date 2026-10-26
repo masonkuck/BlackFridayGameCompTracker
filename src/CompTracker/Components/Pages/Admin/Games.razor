@@ -74,7 +74,7 @@ else
                         }
                     </td>
                     <td><span class="badge @g.ScoringType">@g.ScoringType.ShortLabel()</span></td>
-                    <td>
+                    <td class="nowrap">
                         <span class="@(done == activePlayerIds.Count && done > 0 ? "ok-text" : "")">@done / @activePlayerIds.Count</span>
                     </td>
                     <td @onclick:stopPropagation>
