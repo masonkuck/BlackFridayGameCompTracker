@@ -25,6 +25,10 @@
         <div class="board-title">
             <h1>@view.Game.Title</h1>
             <span class="badge Bracket">@ScoringType.Bracket.Label()</span>
+            @if (view.Game.ForFun)
+            {
+                <span class="badge fun" title="Tracked, but doesn't count toward the leaderboard"><Icon Name="confetti" /> For fun</span>
+            }
         </div>
         @if (!string.IsNullOrWhiteSpace(view.Game.Notes))
         {
@@ -95,7 +99,10 @@
                             <li class="lb-row board-row rank-@Math.Min(st.Place, 4)">
                                 <span class="lb-rank">@st.Place</span>
                                 <span class="lb-name">@st.PlayerName</span>
-                                <span class="lb-points">@st.Points<small>pts</small></span>
+                                @if (!view.Game.ForFun)
+                                {
+                                    <span class="lb-points">@st.Points<small>pts</small></span>
+                                }
                             </li>
                         }
                     </ol>

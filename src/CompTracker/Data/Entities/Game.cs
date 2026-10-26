@@ -40,6 +40,9 @@ public class Game
     public bool IsActive { get; set; } = true;
     public int SortOrder { get; set; }
 
+    // Tracked like any other game (standings, brackets, todo, ticker) but worth no points on the leaderboard.
+    public bool ForFun { get; set; }
+
     // Bracket games only: the first-round slots as comma-separated player ids, 0 for a bye (see BracketEngine).
     public string? BracketSlots { get; set; }
 

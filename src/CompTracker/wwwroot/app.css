@@ -190,6 +190,9 @@ textarea.input { resize: vertical; }
 
 .field { display: flex; flex-direction: column; gap: .35rem; }
 .field > span { font-size: .85rem; color: var(--muted); }
+.check-field { display: flex; gap: .6rem; align-items: flex-start; cursor: pointer; }
+.check-field input { width: 1.1rem; height: 1.1rem; margin-top: .15rem; accent-color: var(--accent); flex-shrink: 0; }
+.check-field .small { display: block; margin-top: .15rem; }
 
 /* ---------- Time input (min : sec . ms boxes) ---------- */
 .time-input { display: inline-flex; align-items: flex-start; gap: .25rem; }
@@ -266,6 +269,8 @@ textarea.input { resize: vertical; }
 .badge.ScoreLowest { color: var(--low); }
 .badge.Bracket { color: var(--bracket); }
 .badge.inactive-badge { color: var(--muted); }
+.badge.fun { color: var(--accent); }
+.badge .icon { vertical-align: -.1em; }
 
 /* ---------- Backups ---------- */
 .backup-folder { overflow-wrap: anywhere; }
@@ -426,6 +431,7 @@ html[data-sound=blocked] .sound-toggle { color: var(--gold); border-color: var(-
 .game-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: .5rem; }
 .game-card-title { font-size: 1.05rem; line-height: 1.25; }
 .game-card-head .badge { flex-shrink: 0; font-size: .7rem; }
+.game-card-foot .badge { flex-shrink: 0; font-size: .65rem; }
 .game-card-leader { display: flex; align-items: center; gap: .4rem; min-width: 0; }
 .leader-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .leader-result { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }

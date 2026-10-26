@@ -17,6 +17,10 @@ else if (game is not null)
     <h1>@game.Title</h1>
     <p>
         <span class="badge @game.ScoringType">@game.ScoringType.Label()</span>
+        @if (game.ForFun)
+        {
+            <span class="badge fun" title="Tracked, but doesn't count toward the leaderboard"><Icon Name="confetti" /> For fun</span>
+        }
         @if (!game.IsActive)
         {
             <span class="badge inactive-badge">Inactive</span>
@@ -94,7 +98,7 @@ else if (game is not null)
                                     <div class="muted small">Not played</div>
                                 }
                             </td>
-                            <td class="points">@(row.Standing?.Points.ToString() ?? "")</td>
+                            <td class="points">@(game.ForFun ? "" : row.Standing?.Points.ToString())</td>
                             <td class="actions">
                                 <button class="btn sm primary" @onclick="() => SaveAsync(row)" disabled="@(!IsDirty(row))">Save</button>
                                 <button class="btn sm danger" @onclick="() => ClearAsync(row)" disabled="@(row.Standing is null)">Clear</button>

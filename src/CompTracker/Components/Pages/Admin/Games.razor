@@ -30,6 +30,13 @@
             <span>Notes <span class="muted">(optional)</span></span>
             <textarea class="input" rows="3" maxlength="2000" placeholder="Platform, category, rules…" @bind="notes"></textarea>
         </label>
+        <label class="check-field">
+            <input type="checkbox" @bind="forFun" />
+            <span>
+                Just for fun
+                <span class="muted small">Standings, brackets and the todo list still track it, but it's worth no points on the leaderboard.</span>
+            </span>
+        </label>
         <div class="modal-actions">
             <button class="btn" type="button" @onclick="CloseModal">Cancel</button>
             <button class="btn primary" type="submit" disabled="@string.IsNullOrWhiteSpace(title)">
@@ -73,7 +80,13 @@ else
                             <div class="muted small">@g.Notes</div>
                         }
                     </td>
-                    <td><span class="badge @g.ScoringType">@g.ScoringType.ShortLabel()</span></td>
+                    <td>
+                        <span class="badge @g.ScoringType">@g.ScoringType.ShortLabel()</span>
+                        @if (g.ForFun)
+                        {
+                            <span class="badge fun" title="Tracked, but doesn't count toward the leaderboard"><Icon Name="confetti" /> For fun</span>
+                        }
+                    </td>
                     <td class="nowrap">
                         @if (g.ScoringType == ScoringType.Bracket)
                         {
@@ -111,6 +124,7 @@ else
     private string title = "";
     private ScoringType scoringType = ScoringType.TimeLowest;
     private string? notes;
+    private bool forFun;
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -136,6 +150,7 @@ else
         title = g.Title;
         scoringType = g.ScoringType;
         notes = g.Notes;
+        forFun = g.ForFun;
         modalOpen = true;
     }
 
@@ -150,6 +165,7 @@ else
         editingId = null;
         title = "";
         notes = null;
+        forFun = false;
         scoringType = ScoringType.TimeLowest;
     }
 
@@ -181,6 +197,7 @@ else
         game.Title = title.Trim();
         game.ScoringType = scoringType;
         game.Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        game.ForFun = forFun;
         await db.SaveChangesAsync();
 
         CloseModal();

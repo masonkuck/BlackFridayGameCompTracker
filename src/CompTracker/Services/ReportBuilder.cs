@@ -2,7 +2,7 @@ using CompTracker.Data.Entities;
 
 namespace CompTracker.Services;
 
-public record GameSummary(int GameId, string Title, ScoringType ScoringType, IReadOnlyList<Standing> Standings);
+public record GameSummary(int GameId, string Title, ScoringType ScoringType, IReadOnlyList<Standing> Standings, bool ForFun = false);
 
 public record RecentScore(GameSummary Game, Standing Standing);
 
@@ -58,7 +58,7 @@ public static class ReportBuilder
         var activeIds = players.Select(p => p.Id).ToHashSet();
         return games
             .Select(g => new GameSummary(g.Id, g.Title, g.ScoringType,
-                ScoringService.Rank(g.ScoringType, g.Scores.Where(s => activeIds.Contains(s.PlayerId)), table)))
+                ScoringService.Rank(g.ScoringType, g.Scores.Where(s => activeIds.Contains(s.PlayerId)), table, g.ForFun), g.ForFun))
             .ToList();
     }
 
@@ -70,8 +70,10 @@ public static class ReportBuilder
             .Take(count)
             .ToList();
 
+    // The printable stats are about the competition, so just-for-fun games are left out.
     public static TournamentReport Build(IReadOnlyCollection<Player> players, IReadOnlyCollection<Game> games, IReadOnlyCollection<PlacePoints> table)
     {
+        games = games.Where(g => !g.ForFun).ToList();
         var summaries = BuildGameSummaries(players, games, table);
         var leaderboard = ScoringService.BuildLeaderboard(players, games, table);
         var maxPoints = ScoringService.PointsForPlace(1, table);

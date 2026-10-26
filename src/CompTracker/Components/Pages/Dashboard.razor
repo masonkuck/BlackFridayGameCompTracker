@@ -113,6 +113,10 @@
                                     </span>
                                 }
                                 <span class="game-card-foot">
+                                    @if (g.ForFun)
+                                    {
+                                        <span class="badge fun" title="Just for fun: doesn't count toward the leaderboard"><Icon Name="confetti" /> For fun</span>
+                                    }
                                     <span class="progress"><span class="progress-fill" style="width:@(pct)%"></span></span>
                                     <span class="muted small" title="@(isBracket ? "knocked out" : "played")">@g.Standings.Count/@total</span>
                                 </span>

@@ -27,6 +27,10 @@
         <div class="board-title">
             <h1>@s.Title</h1>
             <span class="badge @s.ScoringType">@s.ScoringType.Label()</span>
+            @if (s.ForFun)
+            {
+                <span class="badge fun" title="Tracked, but doesn't count toward the leaderboard"><Icon Name="confetti" /> For fun</span>
+            }
         </div>
         @if (!string.IsNullOrWhiteSpace(board.Notes))
         {
@@ -49,7 +53,10 @@
                                 <span class="lb-rank">@st.Place</span>
                                 <span class="lb-name">@st.PlayerName</span>
                                 <ScoreValue Type="s.ScoringType" Value="st.Value" Class="board-result" />
-                                <span class="lb-points">@st.Points<small>pts</small></span>
+                                @if (!s.ForFun)
+                                {
+                                    <span class="lb-points">@st.Points<small>pts</small></span>
+                                }
                             </li>
                         }
                     </ol>

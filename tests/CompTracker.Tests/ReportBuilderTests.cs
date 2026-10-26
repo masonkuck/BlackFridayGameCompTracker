@@ -107,6 +107,19 @@ public class ReportBuilderTests
     }
 
     [Fact]
+    public void Build_LeavesOutForFunGames()
+    {
+        Player a = P(1, "A"), b = P(2, "B");
+        var real = new Game { Id = 1, Title = "Real", ScoringType = ScoringType.ScoreHighest, Scores = [S(a, 20), S(b, 10)] };
+        var fun = new Game { Id = 2, Title = "Fun", ScoringType = ScoringType.ScoreHighest, ForFun = true, Scores = [S(b, 99), S(a, 1)] };
+
+        var report = ReportBuilder.Build([a, b], [real, fun], DefaultTable);
+
+        Assert.Equal(["Real"], report.Games.Select(g => g.Title));
+        Assert.Equal(2, For(report, "B").BestGame!.Standing!.Place); // B won the fun game, but that doesn't count
+    }
+
+    [Fact]
     public void BuildRecent_NewestFirst_WithCurrentPlace_AndLimit()
     {
         Player a = P(1, "A"), b = P(2, "B");

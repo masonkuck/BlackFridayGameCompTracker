@@ -117,6 +117,37 @@ public class ScoringServiceTests
     }
 
     [Fact]
+    public void Rank_ForFunGame_StillPlacesButGivesNoPoints()
+    {
+        Player a = P(1, "A"), b = P(2, "B");
+        var standings = ScoringService.Rank(ScoringType.ScoreHighest, [S(a, 10), S(b, 20)], DefaultTable, forFun: true);
+
+        Assert.Equal([("B", 1, 0), ("A", 2, 0)], standings.Select(s => (s.PlayerName, s.Place, s.Points)));
+    }
+
+    [Fact]
+    public void BuildLeaderboard_LeavesOutForFunGames()
+    {
+        Player a = P(1, "A"), b = P(2, "B");
+        var real = new Game { Id = 1, Title = "Real", ScoringType = ScoringType.ScoreHighest, Scores = [S(a, 20), S(b, 10)] };
+        var fun = new Game { Id = 2, Title = "Fun", ScoringType = ScoringType.ScoreHighest, ForFun = true, Scores = [S(b, 99), S(a, 1)] };
+
+        var board = ScoringService.BuildLeaderboard([a, b], [real, fun], DefaultTable);
+
+        Assert.Equal([("A", 10, 1, 1, 1), ("B", 9, 0, 1, 1)],
+            board.Select(r => (r.PlayerName, r.TotalPoints, r.FirstPlaces, r.GamesDone, r.GamesTotal)));
+    }
+
+    [Fact]
+    public void BuildTodo_StillListsForFunGames()
+    {
+        var a = P(1, "A");
+        var todo = ScoringService.BuildTodo([a], [new Game { Id = 1, Title = "Fun", ForFun = true }]);
+
+        Assert.Equal(["Fun"], todo[0].RemainingGames);
+    }
+
+    [Fact]
     public void BuildTodo_ListsGamesWithoutAScore()
     {
         Player a = P(1, "A"), b = P(2, "B");

@@ -35,7 +35,7 @@ public class ScoringService(IDbContextFactory<AppDbContext> dbFactory)
             UseBracketPlaces(game, await db.Players.AsNoTracking().Where(p => p.IsActive).ToDictionaryAsync(p => p.Id));
 
         var table = await db.PlacePoints.AsNoTracking().ToListAsync();
-        return Rank(game.ScoringType, game.Scores, table);
+        return Rank(game.ScoringType, game.Scores, table, game.ForFun);
     }
 
     public async Task<IReadOnlyList<LeaderboardRow>> GetLeaderboardAsync()
@@ -127,7 +127,7 @@ public class ScoringService(IDbContextFactory<AppDbContext> dbFactory)
             .ToListAsync();
 
         return new GameBoard(
-            new GameSummary(game.Id, game.Title, game.ScoringType, standings),
+            new GameSummary(game.Id, game.Title, game.ScoringType, standings, game.ForFun),
             game.Notes,
             game.IsActive,
             notPlayed.Where(p => !played.Contains(p.Id)).Select(p => p.Name).ToList());
@@ -165,12 +165,15 @@ public class ScoringService(IDbContextFactory<AppDbContext> dbFactory)
 
     // Standard competition ranking: tied values share a place and the next place is skipped (1, 2, 2, 4).
     // Bracket "scores" already are places (and players still in the bracket have none), so they're used as-is.
-    public static List<Standing> Rank(ScoringType type, IEnumerable<Score> scores, IReadOnlyCollection<PlacePoints> table)
+    // Just-for-fun games still rank everyone, but every place is worth 0 points.
+    public static List<Standing> Rank(ScoringType type, IEnumerable<Score> scores, IReadOnlyCollection<PlacePoints> table, bool forFun = false)
     {
+        int Points(int place) => forFun ? 0 : PointsForPlace(place, table);
+
         if (type == ScoringType.Bracket)
             return scores
                 .OrderBy(s => s.Value).ThenBy(s => s.Player.Name)
-                .Select(s => new Standing(s.PlayerId, s.Player.Name, s.Value, (int)s.Value, PointsForPlace((int)s.Value, table), s.UpdatedAt))
+                .Select(s => new Standing(s.PlayerId, s.Player.Name, s.Value, (int)s.Value, Points((int)s.Value), s.UpdatedAt))
                 .ToList();
 
         var ordered = type.LowerIsBetter()
@@ -182,13 +185,15 @@ public class ScoringService(IDbContextFactory<AppDbContext> dbFactory)
         {
             var s = ordered[i];
             var place = i > 0 && ordered[i - 1].Value == s.Value ? standings[i - 1].Place : i + 1;
-            standings.Add(new Standing(s.PlayerId, s.Player.Name, s.Value, place, PointsForPlace(place, table), s.UpdatedAt));
+            standings.Add(new Standing(s.PlayerId, s.Player.Name, s.Value, place, Points(place), s.UpdatedAt));
         }
         return standings;
     }
 
     public static List<LeaderboardRow> BuildLeaderboard(IReadOnlyCollection<Player> players, IReadOnlyCollection<Game> games, IReadOnlyCollection<PlacePoints> table)
     {
+        // Just-for-fun games don't count toward points, firsts or games played.
+        games = games.Where(g => !g.ForFun).ToList();
         var activeIds = players.Select(p => p.Id).ToHashSet();
         var standings = games
             .SelectMany(g => Rank(g.ScoringType, g.Scores.Where(s => activeIds.Contains(s.PlayerId)), table))
