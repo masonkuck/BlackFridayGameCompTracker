@@ -37,8 +37,12 @@ public sealed class BracketAdminTests : IDisposable
         admin = new BracketAdmin(factory, scoring, notifier);
     }
 
-    // 1 v 4 and 2 v 3.
-    private Task<string?> SeedAsync() => admin.SetSlotsAsync(gameId, [1, 4, 2, 3]);
+    // 1 v 4 and 2 v 3, locked in and ready for results.
+    private async Task SeedAsync()
+    {
+        Assert.Null(await admin.SetSlotsAsync(gameId, [1, 4, 2, 3]));
+        Assert.Null(await admin.SetLockedAsync(gameId, true));
+    }
 
     [Fact]
     public async Task Draw_PutsEveryActivePlayerIn()
@@ -88,14 +92,38 @@ public sealed class BracketAdminTests : IDisposable
     }
 
     [Fact]
-    public async Task MatchupsLockOnceResultsAreIn()
+    public async Task WinnersNeedTheBracketLockedIn()
+    {
+        Assert.Null(await admin.SetSlotsAsync(gameId, [1, 4, 2, 3]));
+        Assert.NotNull(await admin.SetWinnerAsync(gameId, "W1-1", 1));
+
+        Assert.Null(await admin.SetLockedAsync(gameId, true));
+        Assert.Null(await admin.SetWinnerAsync(gameId, "W1-1", 1));
+    }
+
+    [Fact]
+    public async Task MatchupsCanOnlyChangeWhileUnlocked()
     {
         await SeedAsync();
-        await admin.SetWinnerAsync(gameId, "W1-1", 1);
         Assert.NotNull(await admin.SetSlotsAsync(gameId, [1, 3, 2, 4]));
+        Assert.NotNull(await admin.DrawAsync(gameId));
 
+        // Can't unlock once results are in; reset them first.
+        await admin.SetWinnerAsync(gameId, "W1-1", 1);
+        Assert.NotNull(await admin.SetLockedAsync(gameId, false));
         await admin.ResetResultsAsync(gameId);
+        Assert.Null(await admin.SetLockedAsync(gameId, false));
         Assert.Null(await admin.SetSlotsAsync(gameId, [1, 3, 2, 4]));
+    }
+
+    [Fact]
+    public async Task Remove_AlsoUnlocks()
+    {
+        await SeedAsync();
+        await admin.RemoveAsync(gameId);
+        await using var db = await factory.CreateDbContextAsync();
+        var game = await db.Games.SingleAsync(g => g.Id == gameId);
+        Assert.Equal((null, false), (game.BracketSlots, game.BracketLocked));
     }
 
     [Fact]

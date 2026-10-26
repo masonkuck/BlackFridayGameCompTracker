@@ -53,6 +53,9 @@ namespace CompTracker.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("BracketLocked")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("BracketSlots")
                         .HasMaxLength(4000)
                         .HasColumnType("TEXT");

@@ -17,7 +17,7 @@ public record BracketView(Game Game, BracketState? State, IReadOnlyDictionary<in
 }
 
 // What a bracket game's dashboard card shows besides the champion. Next is a match that can be played now.
-public record BracketSummary(int Entrants, int StillIn, string? Next);
+public record BracketSummary(int Entrants, int StillIn, bool Locked, string? Next);
 
 // Everything is computed on read from the current scores and points table, so edits show up immediately.
 public class ScoringService(IDbContextFactory<AppDbContext> dbFactory)
@@ -67,7 +67,8 @@ public class ScoringService(IDbContextFactory<AppDbContext> dbFactory)
             .ToDictionary(x => x.Id, x => new BracketSummary(
                 x.State!.Entrants.Count(),
                 x.State.Entrants.Count() - x.State.Placements.Count,
-                x.State.Ready.Select(m => $"{Name(m.A.PlayerId)} vs {Name(m.B.PlayerId)}").FirstOrDefault()));
+                games.First(g => g.Id == x.Id).BracketLocked,
+                x.State.Ready.Where(_ => games.First(g => g.Id == x.Id).BracketLocked).Select(m => $"{Name(m.A.PlayerId)} vs {Name(m.B.PlayerId)}").FirstOrDefault()));
         return new DashboardData(
             BuildLeaderboard(players, games, table),
             BuildTodo(players, games),

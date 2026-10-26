@@ -45,6 +45,10 @@
                     <span class="muted">is the champion</span>
                 </div>
             }
+            else if (!view.Game.BracketLocked)
+            {
+                <p class="muted">The matchups are still being set up.</p>
+            }
             else if (state.Ready.Any())
             {
                 <div class="up-next">

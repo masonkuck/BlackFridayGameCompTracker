@@ -43,6 +43,9 @@ public class Game
     // Bracket games only: the first-round slots as comma-separated player ids, 0 for a bye (see BracketEngine).
     public string? BracketSlots { get; set; }
 
+    // Matchups are rearranged until the bracket is locked in; winners can only be picked after that.
+    public bool BracketLocked { get; set; }
+
     public List<Score> Scores { get; set; } = [];
     public List<BracketResult> BracketResults { get; set; } = [];
 }

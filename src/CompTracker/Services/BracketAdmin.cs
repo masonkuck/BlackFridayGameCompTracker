@@ -4,11 +4,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CompTracker.Services;
 
-// Changes to a bracket game: drawing and reseeding it, and recording or undoing match winners.
+// Changes to a bracket game: drawing and rearranging it, locking it in, and recording or undoing match winners.
 // Every change notifies the dashboard; recording a winner can also crown a champion or a new overall leader.
 public class BracketAdmin(IDbContextFactory<AppDbContext> dbFactory, ScoringService scoring, ChangeNotifier notifier)
 {
-    // A fresh random draw of all active players. Only before any results are in.
+    // A fresh random draw of all active players. Only while the bracket isn't locked in.
     public async Task<string?> DrawAsync(int gameId, Random? random = null)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
@@ -18,7 +18,7 @@ public class BracketAdmin(IDbContextFactory<AppDbContext> dbFactory, ScoringServ
         return await SetSlotsAsync(gameId, BracketEngine.RandomSeed(players, random ?? Random.Shared));
     }
 
-    // Saves a hand-edited seeding. Only before any results are in, since results belong to the old matchups.
+    // Saves rearranged matchups. Only while the bracket isn't locked in.
     public async Task<string?> SetSlotsAsync(int gameId, IReadOnlyList<int> slots)
     {
         if (BracketEngine.Validate(slots) is { } problem)
@@ -27,8 +27,8 @@ public class BracketAdmin(IDbContextFactory<AppDbContext> dbFactory, ScoringServ
         var game = await db.Games.Include(g => g.BracketResults).FirstOrDefaultAsync(g => g.Id == gameId);
         if (game is null)
             return "That game doesn't exist anymore.";
-        if (game.BracketResults.Count > 0)
-            return "Results are already in. Reset the results before changing the matchups.";
+        if (game.BracketLocked || game.BracketResults.Count > 0)
+            return "The bracket is locked in. Unlock it to change the matchups.";
 
         game.BracketSlots = BracketEngine.ToText(slots);
         await db.SaveChangesAsync();
@@ -36,16 +36,36 @@ public class BracketAdmin(IDbContextFactory<AppDbContext> dbFactory, ScoringServ
         return null;
     }
 
-    // Removes the bracket entirely (seeding and results).
+    // Lock in freezes the matchups so results can be entered; unlocking is only possible before any results.
+    public async Task<string?> SetLockedAsync(int gameId, bool locked)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var game = await db.Games.Include(g => g.BracketResults).FirstOrDefaultAsync(g => g.Id == gameId);
+        if (game is null)
+            return "That game doesn't exist anymore.";
+        if (locked && BracketEngine.Validate(BracketEngine.Parse(game.BracketSlots)) is { } problem)
+            return problem;
+        if (!locked && game.BracketResults.Count > 0)
+            return "Results are already in. Reset the results before unlocking the matchups.";
+
+        game.BracketLocked = locked;
+        await db.SaveChangesAsync();
+        notifier.Notify();
+        return null;
+    }
+
+    // Removes the bracket entirely (matchups and results).
     public async Task RemoveAsync(int gameId)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         await db.BracketResults.Where(r => r.GameId == gameId).ExecuteDeleteAsync();
-        await db.Games.Where(g => g.Id == gameId).ExecuteUpdateAsync(s => s.SetProperty(g => g.BracketSlots, (string?)null));
+        await db.Games.Where(g => g.Id == gameId).ExecuteUpdateAsync(s => s
+            .SetProperty(g => g.BracketSlots, (string?)null)
+            .SetProperty(g => g.BracketLocked, false));
         notifier.Notify();
     }
 
-    // Clears every result but keeps the matchups.
+    // Clears every result but keeps the matchups (still locked in).
     public async Task ResetResultsAsync(int gameId)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
@@ -82,6 +102,8 @@ public class BracketAdmin(IDbContextFactory<AppDbContext> dbFactory, ScoringServ
         var slots = BracketEngine.Parse(game.BracketSlots);
         if (BracketEngine.Validate(slots) is { } problem)
             return problem;
+        if (!game.BracketLocked)
+            return "Lock in the bracket before picking winners.";
 
         if (winnerId is { } id)
         {

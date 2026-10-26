@@ -1,9 +1,11 @@
 @* The bracket drawn as columns of matches: winners bracket, losers bracket, then the grand final.
-   Scrolls sideways inside its own box when it's wider than the screen. *@
+   Scrolls sideways inside its own box when it's wider than the screen.
+   Admin modes: Arrange lets first-round players be dragged (or tapped, on touch screens) onto another slot to swap;
+   Play lets a player in a match be clicked to make them the winner, and decided matches be undone. *@
 
 @if (View.State is { } state)
 {
-    <div class="bracket-sections">
+    <div class="bracket-sections @(Mode == BracketTreeMode.View ? "" : "bracket-" + Mode.ToString().ToLowerInvariant())">
         @foreach (var (side, title) in Sections)
         {
             var rounds = state.Matches.Where(m => m.Side == side && Visible(m)).GroupBy(m => m.Round).OrderBy(g => g.Key).ToList();
@@ -22,9 +24,24 @@
                                 <div class="bracket-round-matches">
                                     @foreach (var m in round)
                                     {
-                                        <div class="bm @(m.Ready ? "ready" : "") @(m.HasBye ? "has-bye" : "")">
-                                            @SlotView(m, m.A)
-                                            @SlotView(m, m.B)
+                                        var arranging = Mode == BracketTreeMode.Arrange && m.Side == BracketSide.Winners && m.Round == 1;
+                                        <div class="bm @(m.Ready && Mode != BracketTreeMode.Arrange ? "ready" : "") @(m.HasBye ? "has-bye" : "")">
+                                            @if (arranging)
+                                            {
+                                                @ArrangeSlot(m.Index * 2, m.A)
+                                                @ArrangeSlot(m.Index * 2 + 1, m.B)
+                                            }
+                                            else
+                                            {
+                                                @SlotView(m, m.A)
+                                                @SlotView(m, m.B)
+                                            }
+                                            @if (Mode == BracketTreeMode.Play && m.Decided && !m.HasBye)
+                                            {
+                                                <button type="button" class="bm-undo" title="Undo this result" @onclick="() => OnUndo.InvokeAsync(m)">
+                                                    <Icon Name="arrow-counter-clockwise" />
+                                                </button>
+                                            }
                                         </div>
                                     }
                                 </div>
@@ -39,6 +56,18 @@
 
 @code {
     [Parameter, EditorRequired] public BracketView View { get; set; } = null!;
+    [Parameter] public BracketTreeMode Mode { get; set; }
+
+    // Arrange: swap the players (or byes) in these two first-round slots.
+    [Parameter] public EventCallback<(int From, int To)> OnSwap { get; set; }
+
+    // Play: this player won this match (a new result, or flipping a decided one).
+    [Parameter] public EventCallback<(BracketMatch Match, int WinnerId)> OnPick { get; set; }
+    [Parameter] public EventCallback<BracketMatch> OnUndo { get; set; }
+
+    private int? selected;  // tap-to-swap: the first slot tapped
+    private int? dragFrom;
+    private int? dragOver;
 
     private static readonly (BracketSide, string)[] Sections =
     [
@@ -47,30 +76,84 @@
         (BracketSide.Final, "Grand final"),
     ];
 
+    protected override void OnParametersSet()
+    {
+        if (Mode != BracketTreeMode.Arrange)
+            selected = dragFrom = dragOver = null;
+    }
+
     // First-round byes stay visible so the draw makes sense; later bye matches are just bookkeeping.
-    private static bool Visible(BracketMatch m) =>
-        !(m.A.IsBye && m.B.IsBye) && (!m.HasBye || (m.Side == BracketSide.Winners && m.Round == 1));
+    // While arranging, every first-round match shows, even bye vs bye, so players can be dragged into it.
+    private bool Visible(BracketMatch m)
+    {
+        var firstRound = m.Side == BracketSide.Winners && m.Round == 1;
+        if (firstRound && Mode == BracketTreeMode.Arrange)
+            return true;
+        return !(m.A.IsBye && m.B.IsBye) && (!m.HasBye || firstRound);
+    }
 
     private RenderFragment SlotView(BracketMatch m, Slot slot) => __builder =>
     {
         var result = slot.IsPlayer && m.WinnerId is { } w ? (w == slot.PlayerId ? "win" : "lose") : "";
-        <div class="bm-slot @result @(slot.Kind == SlotKind.Player ? "" : "empty")">
-            @if (slot.IsPlayer)
+        var pickable = Mode == BracketTreeMode.Play && slot.IsPlayer && !m.HasBye && (m.Ready || result == "lose");
+        var title = !pickable ? null : m.Ready ? $"{View.Name(slot.PlayerId)} won" : $"Change the winner to {View.Name(slot.PlayerId)}";
+        <div class="bm-slot @result @(slot.Kind == SlotKind.Player ? "" : "empty") @(pickable ? "pickable" : "")"
+             role="@(pickable ? "button" : null)" tabindex="@(pickable ? "0" : null)" title="@title"
+             @onclick="() => Pick(pickable, m, slot)">
+            @SlotLabel(slot)
+            @if (result == "win")
             {
-                <span class="bm-name">@View.Name(slot.PlayerId)</span>
-                @if (result == "win")
-                {
-                    <Icon Name="check-circle" Class="bm-mark" />
-                }
-            }
-            else if (slot.IsBye)
-            {
-                <span class="bm-name">bye</span>
-            }
-            else
-            {
-                <span class="bm-name">TBD</span>
+                <Icon Name="check-circle" Class="bm-mark" />
             }
         </div>
     };
+
+    private RenderFragment ArrangeSlot(int index, Slot slot) => __builder =>
+    {
+        var classes = "bm-slot arrange"
+            + (slot.IsBye ? " empty" : "")
+            + (selected == index ? " selected" : "")
+            + (dragFrom == index ? " dragging" : "")
+            + (dragOver == index && dragFrom != index ? " drop-target" : "");
+        <div class="@classes" draggable="true" data-bracket-slot role="button" tabindex="0"
+             title="Drag onto another slot (or tap one, then another) to swap"
+             @onclick="() => TapAsync(index)"
+             @ondragstart="() => dragFrom = index"
+             @ondragenter="() => dragOver = index"
+             @ondragover:preventDefault
+             @ondrop="() => DropAsync(index)"
+             @ondragend="() => dragFrom = dragOver = null">
+            <Icon Name="dots-six-vertical" Class="bm-grip" />
+            @SlotLabel(slot)
+        </div>
+    };
+
+    private RenderFragment SlotLabel(Slot slot) => __builder =>
+    {
+        <span class="bm-name">@(slot.IsPlayer ? View.Name(slot.PlayerId) : slot.IsBye ? "bye" : "TBD")</span>
+    };
+
+    private Task Pick(bool pickable, BracketMatch m, Slot slot) =>
+        pickable ? OnPick.InvokeAsync((m, slot.PlayerId)) : Task.CompletedTask;
+
+    private async Task TapAsync(int index)
+    {
+        if (selected is not { } first)
+        {
+            selected = index;
+            return;
+        }
+        selected = null;
+        if (first != index)
+            await OnSwap.InvokeAsync((first, index));
+    }
+
+    private async Task DropAsync(int index)
+    {
+        var from = dragFrom;
+        dragFrom = dragOver = null;
+        selected = null;
+        if (from is { } f && f != index)
+            await OnSwap.InvokeAsync((f, index));
+    }
 }

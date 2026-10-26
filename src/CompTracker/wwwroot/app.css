@@ -719,18 +719,45 @@ html[data-sound=blocked] .sound-toggle { color: var(--gold); border-color: var(-
 .chip.up-next-match { background: var(--surface-2); color: var(--text); border: 1px solid var(--accent); }
 .bracket-places .finished { margin: 0 0 1rem; }
 
-/* Admin */
+/* Admin: setting up and running the bracket on the bracket itself. */
 .bracket-admin { margin-bottom: 1.25rem; }
+.bracket-status { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem .75rem; margin-bottom: .75rem; }
+.status-pill { display: inline-flex; align-items: center; gap: .35rem; padding: .2rem .7rem; border-radius: 999px; border: 1px solid currentColor; font-size: .9rem; white-space: nowrap; }
+.status-pill.setup { color: var(--gold); }
+.status-pill.live { color: var(--accent-hover); }
+.status-pill.done { color: var(--ok); }
 .bracket-toolbar { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1.25rem; }
-.seed-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: .75rem; }
-.seed-match { display: flex; flex-direction: column; gap: .35rem; padding: .75rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; }
-.seed-vs { text-align: center; }
-.seed-select.bye { color: var(--muted); font-style: italic; }
-.match-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: .75rem; }
-.match-pick { display: flex; flex-direction: column; gap: .4rem; padding: .75rem; background: var(--surface-2); border: 1px solid var(--accent); border-radius: 10px; }
-.match-pick-buttons { display: flex; align-items: center; gap: .5rem; }
-.match-pick-buttons .btn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.match-pick-buttons .btn:hover { background: var(--ok); border-color: var(--ok); color: #06281c; }
-.result-winner { color: var(--ok); }
-.btn.link-btn { background: transparent; border-color: transparent; color: var(--muted); padding-inline: .25rem; }
-.btn.link-btn:hover { color: var(--text); border-color: var(--border); }
+.confirm-message { font-size: 1.05rem; margin-top: 0; }
+.confirm-round { display: block; margin-top: .25rem; color: var(--muted); font-size: .85rem; }
+
+/* Matches get a corner undo button, so they can't clip their contents; the slots round their own corners. */
+.bracket-play .bm, .bracket-arrange .bm { position: relative; overflow: visible; }
+.bracket-play .bm-slot:first-child, .bracket-arrange .bm-slot:first-child { border-radius: 7px 7px 0 0; }
+.bracket-play .bm-slot:nth-child(2), .bracket-arrange .bm-slot:nth-child(2) { border-radius: 0 0 7px 7px; }
+.bm-slot.pickable { cursor: pointer; }
+.bm-slot.pickable:hover, .bm-slot.pickable:focus-visible { background: rgba(52, 211, 153, .22); color: var(--text); outline: none; }
+.bm.ready .bm-slot.pickable { color: var(--text); }
+.bm-slot.lose.pickable:hover { text-decoration: none; }
+.bm-undo {
+    position: absolute; top: -.6rem; right: -.6rem; z-index: 1;
+    width: 1.5rem; height: 1.5rem; padding: 0;
+    display: grid; place-items: center;
+    background: var(--surface); color: var(--muted);
+    border: 1px solid var(--border); border-radius: 50%;
+    font-size: .8rem; cursor: pointer;
+    opacity: 0; transition: opacity .15s;
+}
+.bm:hover .bm-undo, .bm-undo:focus-visible { opacity: 1; }
+.bm-undo:hover { color: var(--danger); border-color: var(--danger); }
+/* No hover on touch screens (or phones): keep undo visible there. */
+@media (hover: none), (max-width: 640px) { .bm-undo { opacity: 1; } }
+
+/* While arranging, a player next to a bye is just as movable as anyone: only the bye itself is dimmed. */
+.bracket-arrange .bm.has-bye { opacity: 1; }
+.bm-slot.arrange.empty { opacity: .55; }
+.bm-slot.arrange { cursor: grab; user-select: none; }
+.bm-slot.arrange:hover { background: rgba(139, 92, 246, .14); }
+.bm-grip { color: var(--muted); font-size: .9rem; flex-shrink: 0; }
+.bm-slot.arrange.selected { background: rgba(139, 92, 246, .3); box-shadow: inset 0 0 0 1px var(--accent); }
+.bm-slot.arrange.dragging { opacity: .4; }
+.bm-slot.arrange.drop-target { background: rgba(139, 92, 246, .3); box-shadow: inset 0 0 0 2px var(--accent); }

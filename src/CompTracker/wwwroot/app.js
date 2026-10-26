@@ -207,3 +207,11 @@ document.addEventListener('paste', (e) => {
     setBox(part('f'), fraction);
     part('f')?.focus();
 });
+
+// Bracket matchups (admin): Firefox only starts a drag if the drag carries some data, and Blazor can't set it.
+document.addEventListener('dragstart', e => {
+    if (e.target.closest?.('[data-bracket-slot]')) {
+        e.dataTransfer.setData('text/plain', '');
+        e.dataTransfer.effectAllowed = 'move';
+    }
+});
